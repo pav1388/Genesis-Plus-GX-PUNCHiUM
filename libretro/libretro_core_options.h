@@ -96,6 +96,36 @@ struct retro_core_option_v2_category option_cats_us[] = {
 
 struct retro_core_option_v2_definition option_defs_us[] = {
    {
+      "punchium_audio_track_format",
+      "Audio track format (Paprium)",
+      NULL,
+      "Select the preferred format, if there are no files, then all other formats are checked.",
+      NULL,
+      "audio",
+      {
+         { "wav",   "WAV" },
+         { "mp3",   "MP3" },
+         { "ogg",   "OGG" },
+         { "disabled", "Disabled" },
+         { NULL, NULL },
+      },
+      "wav"
+   },
+   {
+      "punchium_tile_cache",
+      "Tile cache 1 MB (Paprium)",
+      NULL,
+      "Enables cache for tiles. +1 MB in PAM",
+      NULL,
+      "system",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
       "genesis_plus_gx_system_hw",
       "System Hardware",
       NULL,

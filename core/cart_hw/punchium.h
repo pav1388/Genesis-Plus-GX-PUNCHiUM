@@ -6,6 +6,28 @@ Project Little Man
 
 // edit by pav13
 
+/*-----------+----------------+
+     32 .....|............. 31
+     64 .....|............. 61
+    128 .....|............ 127
+    256 .....|............ 251
+    512 .....|............ 509
+   1024 .....|........... 1021
+   2048 .....|........... 2039
+   4096 .....|........... 4093
+   6144 .....|........... 6133
+   8192 .....|........... 8179
+  10240 .....|.......... 10223
+  12288 .....|.......... 12281
+  16384 .....|.......... 16381
++------------+----------------*/
+
+#define TILE_CACHE_ENABLE 1 // включение кэша тайлов
+#define TILE_CACHE_SIZE 1024 // размер кэша для тайлов в килобайтах. Доступные размеры см. в таблице
+#define TILE_CACHE_HASH_SIZE 2039 // (TILE_CACHE_SIZE * 2) и ищем простое число по таблице
+#define MAX_TILE_CACHE_ENTRIES (TILE_CACHE_SIZE * 2)
+#define MAX_TILE_SIZE 512
+
 #define DEBUG_CHEAT 0
 #define DEBUG_MODE 0
 #define DEBUG_SPRITE 0
@@ -18,7 +40,6 @@ Project Little Man
 #elif __vita__
     #define FASTCALL 
     #include <psp2/io/stat.h>
-	// #include <psp2/io/fcntl.h>
 #else
     #define FASTCALL
     #include <stdio.h>
@@ -148,6 +169,164 @@ uint8 punchium_volume_table[256] = // Логарифмическая крива�
 
 static void punchium_decoder_type(int src, uint8 *dst);
 
+#if TILE_CACHE_ENABLE
+#if TILE_CACHE_HASH_SIZE >= MAX_TILE_CACHE_ENTRIES
+	#error "TILE_CACHE_HASH_SIZE must be less than MAX_TILE_CACHE_ENTRIES"
+#endif
+
+typedef struct __attribute__((aligned(4))) {
+	uint32_t src_addr;
+	uint8_t data[MAX_TILE_SIZE];
+	uint32_t last_used;
+} TileCacheEntry; // Итого 520 байт на хранение одного любого тайла
+
+typedef struct {
+	TileCacheEntry *entries;
+	uint32_t clock;
+	uint32_t *hash_table;
+	uint32_t clock_hand;
+} TileCache;
+
+static TileCache tile_cache = {0};
+extern uint8_t punchium_tile_cache;
+
+// Быстрая очистка без освобождения памяти
+static void reset_tile_cache() {
+	if (!punchium_tile_cache || !tile_cache.entries) 
+		return;
+
+	memset(tile_cache.entries, 0, sizeof(TileCacheEntry) * MAX_TILE_CACHE_ENTRIES);
+	memset(tile_cache.hash_table, MAX_TILE_CACHE_ENTRIES, sizeof(uint32_t) * TILE_CACHE_HASH_SIZE);
+	
+	tile_cache.clock = 0;
+	tile_cache.clock_hand = 0;
+}
+
+// Полная очистка и освобождение памяти
+static void free_tile_cache() {
+	if (!punchium_tile_cache)
+		return;
+	
+	if (tile_cache.entries) {
+		free(tile_cache.entries);
+		tile_cache.entries = NULL;
+	}
+	
+	if (tile_cache.hash_table) {
+		free(tile_cache.hash_table);
+		tile_cache.hash_table = NULL;
+	}
+	
+	tile_cache.clock = 0;
+	tile_cache.clock_hand = 0;
+}
+
+// инициализация кэша и выделение памяти
+static void init_tile_cache() {
+	if (!punchium_tile_cache) {
+		free_tile_cache();
+		return;
+	}
+	
+	// Освобождаем предыдущий кэш, если был
+	free_tile_cache();
+	
+	// Выделяем память
+	tile_cache.entries = (TileCacheEntry*)calloc(MAX_TILE_CACHE_ENTRIES, sizeof(TileCacheEntry));
+	tile_cache.hash_table = (uint32_t*)calloc(TILE_CACHE_HASH_SIZE, sizeof(uint32_t));
+	
+	if (!tile_cache.entries || !tile_cache.hash_table) {
+		free_tile_cache();
+		return;
+	}
+	
+	// Инициализация хеш-таблицы
+	for (int i = 0; i < TILE_CACHE_HASH_SIZE; i++) {
+		tile_cache.hash_table[i] = MAX_TILE_CACHE_ENTRIES;
+	}
+	
+	tile_cache.clock_hand = 0;
+	tile_cache.clock = 0;
+}
+
+// DJB2 хеш-функция
+static inline uint32_t hash_tile_addr(uint32_t src) {
+	uint32_t hash = 5381;
+	hash = ((hash << 5) + hash) + (src & 0xFF);
+	hash = ((hash << 5) + hash) + ((src >> 8) & 0xFF);
+	hash = ((hash << 5) + hash) + ((src >> 16) & 0xFF);
+	hash = ((hash << 5) + hash) + ((src >> 24) & 0xFF);
+	// hash = ((hash << 5) + hash) + (src % 256);  // "соль"
+	return hash % TILE_CACHE_HASH_SIZE;
+}
+
+// Алгоритм для поиска замещаемого слота
+static uint32_t find_replacement_slot() {
+	while (1) {
+		if (tile_cache.entries[tile_cache.clock_hand].last_used < 
+			tile_cache.clock - MAX_TILE_CACHE_ENTRIES) {
+			uint32_t slot = tile_cache.clock_hand;
+			tile_cache.clock_hand = (tile_cache.clock_hand + 1) % MAX_TILE_CACHE_ENTRIES;
+			return slot;
+		}
+		
+		tile_cache.entries[tile_cache.clock_hand].last_used = 0;
+		tile_cache.clock_hand = (tile_cache.clock_hand + 1) % MAX_TILE_CACHE_ENTRIES;
+	}
+}
+
+static void punchium_decoder_type_cached(uint32_t src, uint8_t *dst)
+{
+	// Если кэш выключен, просто декомпрессируем
+	if (!punchium_tile_cache || !tile_cache.entries) {
+		punchium_decoder_type(src, dst);
+		return;
+	}
+
+	// Поиск в хеш-таблице
+	uint32_t hash_index = hash_tile_addr(src);
+	uint32_t cache_index = tile_cache.hash_table[hash_index];
+		
+	// Проверка попадания в кэш
+	if (cache_index < MAX_TILE_CACHE_ENTRIES && 
+		tile_cache.entries[cache_index].src_addr == src) {
+		memcpy(dst, tile_cache.entries[cache_index].data, 512);
+		tile_cache.entries[cache_index].last_used = tile_cache.clock++;
+		return;
+	}
+
+	// Декомпрессия если не найдено в кэше
+	punchium_decoder_type(src, dst);
+	
+	// Добавление в кэш
+	uint32_t lru_index = find_replacement_slot();
+
+	// Заполнение данных
+	tile_cache.entries[lru_index].src_addr = src;
+	tile_cache.entries[lru_index].last_used = tile_cache.clock++;
+	memcpy(tile_cache.entries[lru_index].data, dst, 512);
+	
+	// Обновление хеш-таблицы
+	tile_cache.hash_table[hash_index] = lru_index;
+	
+	// Нормализация clock перед переполнением
+	if (tile_cache.clock >= UINT32_MAX - MAX_TILE_CACHE_ENTRIES) {
+		uint32_t min_usage = UINT32_MAX;
+		for (int i = 0; i < MAX_TILE_CACHE_ENTRIES; i++) {
+			if (tile_cache.entries[i].last_used < min_usage) {
+				min_usage = tile_cache.entries[i].last_used;
+			}
+		}
+		
+		for (int i = 0; i < MAX_TILE_CACHE_ENTRIES; i++) {
+			tile_cache.entries[i].last_used -= min_usage;
+		}
+		
+		tile_cache.clock -= min_usage;
+	}
+}
+#endif
+
 //инициализация музыкальных переменных и буферов
 static void music_var_init (){
 	punchium_s.music_track = 0;
@@ -198,6 +377,12 @@ static void punchium_load_music_file(int track, int reload) {
 		punchium_s.music_track = 0;
 		return;
 	}
+
+#if TILE_CACHE_ENABLE	
+	// Очистка кэша тайлов
+	if (track != 0x17 && track != 0x21 && track != 0x22 && track != 0x23)
+		reset_tile_cache();
+#endif
 	
 	// Очистка памяти от предыдущего трека
 	if (punchium_track.buffer) {
@@ -1277,7 +1462,11 @@ reload:
 		int ptr = punchium_tile_ptr + (*(uint16*)(cart.rom + tilePtr) << 16) + *(uint16*)(cart.rom + tilePtr + 2);
 		static uint8 tile_ram[0x10000];
 		
+#if TILE_CACHE_ENABLE
+		punchium_decoder_type_cached(ptr, tile_ram);
+#else
 		punchium_decoder_type(ptr, tile_ram);
+#endif
 		memcpy(punchium_s.ram + src, tile_ram + ofs * 0x20, tileSize);
 		//if( !tiledupe && dmaPtr < dmalimit && vram < vramlimit && tile < tilelimit)
 
@@ -2536,6 +2725,9 @@ static void punchium_init()
 	punchium_map();
 
 	music_var_init ();
+#if TILE_CACHE_ENABLE
+	init_tile_cache();
+#endif
 
 	memset(&punchium_s, 0, sizeof(punchium_s));
 	memcpy(punchium_s.ram, cart.rom, 0x10000);

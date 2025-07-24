@@ -125,6 +125,9 @@ char CD_BRAM_US[256];
 char CD_BRAM_EU[256];
 char CART_BRAM[256];
 
+uint8_t punchium_tile_cache = 0;
+uint8_t punchium_audio_track_format = 1;
+
 static int vwidth;
 static int vheight;
 static int vwoffset;
@@ -1515,6 +1518,40 @@ static void check_variables(bool first_run)
      }
    }
 
+  var.key = "punchium_tile_cache";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+
+  if (var.value)
+  {
+     if (!strcmp(var.value, "enabled"))
+        punchium_tile_cache = 1;
+     else
+        punchium_tile_cache = 0;
+  }
+  else
+  {
+     punchium_tile_cache = 0;
+  }
+  
+  var.key = "punchium_audio_track_format";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+
+  if (var.value)
+  {
+     if (!strcmp(var.value, "wav"))
+        punchium_audio_track_format = 1;
+     else if (!strcmp(var.value, "mp3"))
+        punchium_audio_track_format = 2;
+     else if (!strcmp(var.value, "ogg"))
+        punchium_audio_track_format = 3;
+     else
+        punchium_audio_track_format = 1;
+  }
+  else
+  {
+     punchium_audio_track_format = 1;
+  }
+  
   var.key = "genesis_plus_gx_system_hw";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
   {
