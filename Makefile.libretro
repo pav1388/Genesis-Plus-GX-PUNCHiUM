@@ -137,6 +137,50 @@ ifneq (,$(findstring unix,$(platform)))
       CFLAGS += -fomit-frame-pointer -ffast-math
       PLATFORM_DEFINES += -DARM -march=armv8-a+crc -mcpu=cortex-a73 -mtune=cortex-a73.cortex-a53
    endif
+   
+# Windows XP (32-bit) target
+ifneq (,$(findstring winxp,$(platform)))
+   # Toolchain override
+   CC := i686-w64-mingw32-gcc
+   CXX := i686-w64-mingw32-g++
+   AR := i686-w64-mingw32-ar
+   LD := i686-w64-mingw32-ld
+   
+   # Force these even if Makefile tries to override later
+   override CC := $(CC)
+   override CXX := $(CXX)
+   override AR := $(AR)
+   override LD := $(LD)
+   
+   # Base compiler flags
+   CFLAGS += -m32 -march=i686 -mtune=generic -std=c++20
+   CFLAGS += -static-libgcc -static-libstdc++
+   CFLAGS += -DWINVER=0x0501 -D_WIN32_WINNT=0x0501 -D_WIN32_IE=0x0600
+   CFLAGS += -D__acrt_iob_func=__mingw_acrt_iob_func -D__USE_MINGW_ANSI_STDIO=1
+   
+   # Linker flags
+   LDFLAGS += -m32 -static-libgcc -static-libstdc++
+   LDFLAGS += -lcomdlg32 -lshlwapi -lws2_32 -lwinmm
+   
+   # XP compatibility flags
+   PLATFORM_DEFINES += -D_WIN32_WINDOWS=0x0501 -DX86_WINXP_COMPAT
+   PLATFORM_DEFINES += -D__USE_W32_SOCKETS -D_WIN32_WINNT=0x0501
+   
+   # Disable Vista+ features
+   PLATFORM_DEFINES += -DWIN32_LEAN_AND_MEAN -DNOMINMAX
+   PLATFORM_DEFINES += -DNO_SHLWAPI_STRFCNS -DNO_SHLWAPI_PATH
+   
+   # Optimization flags (adjust as needed)
+   ifeq ($(DEBUG),)
+      CFLAGS += -O2 -fomit-frame-pointer -ffast-math
+      CFLAGS += -fno-stack-protector -fno-exceptions
+   else
+      CFLAGS += -O0 -g -DDEBUG
+   endif
+   
+   # Output extension
+   TARGET_EXT := .dll
+endif
 
    # Amlogic S905/S905X/S912 (AMLGXBB/AMLGXL/AMLGXM) e.g. Khadas VIM1/2 / S905X2 (AMLG12A) & S922X/A311D (AMLG12B) e.g. Khadas VIM3 - 32-bit userspace
    ifneq (,$(findstring AMLG,$(platform)))
