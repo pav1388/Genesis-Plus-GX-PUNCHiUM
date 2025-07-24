@@ -76,6 +76,7 @@ static uint32_t rng_state;
 extern char g_rom_dir[256]; // путь к папке с ROM
 extern T_SRAM sram;
 extern uint8_t punchium_audio_track_format;
+extern bool punchium_cheat_saitama;
 extern retro_log_printf_t log_cb;
 static char error_str[1024];
 
@@ -188,7 +189,7 @@ typedef struct {
 } TileCache;
 
 static TileCache tile_cache = {0};
-extern uint8_t punchium_tile_cache;
+extern bool punchium_tile_cache;
 
 // Быстрая очистка без освобождения памяти
 static void reset_tile_cache() {
@@ -1256,14 +1257,12 @@ static void punchium_sprite(int index)
 		//return;
 	}
 
-
 #if DEBUG_MODE  /* frozen enemy */
-	{
+	{ 
 		int color = -1;
 		int pri = -1;
 
-		if(0) {}
-		else if( (obj > 0x00 && obj < 0x30) && (anim == 5) ) color = 0;
+		if( (obj > 0x00 && obj < 0x30) && (anim == 5) ) color = 0;
 		else if( (obj == 0x0D) && (anim == 3) ) color = 0;
 
 		if( color != -1 ) {
@@ -2760,26 +2759,28 @@ static void punchium_init()
 
 	fast_dma_hack = 1;  /* skip vram management */
 
-#if DEBUG_CHEAT  /* cheat - big hurt */
-	*(uint16*) (cart.rom + 0x9FE38 + 6) = 0x007F;	/* Tug */
-	*(uint16*) (cart.rom + 0x9FE58 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FF18 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FF38 + 6) = 0x007F;
+// #if DEBUG_CHEAT 
+	if (punchium_cheat_saitama) { /* cheat - big hurt */
+		*(uint16*) (cart.rom + 0x9FE38 + 6) = 0x007F;	/* Tug */
+		*(uint16*) (cart.rom + 0x9FE58 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FF18 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FF38 + 6) = 0x007F;
 
-	*(uint16*) (cart.rom + 0x9FB58 + 6) = 0x007F;	/* Alex */
-	*(uint16*) (cart.rom + 0x9FB78 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FBF8 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FC18 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FCB8 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9FCD8 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FB58 + 6) = 0x007F;	/* Alex */
+		*(uint16*) (cart.rom + 0x9FB78 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FBF8 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FC18 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FCB8 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9FCD8 + 6) = 0x007F;
 
-	*(uint16*) (cart.rom + 0x9F758 + 6) = 0x007F;	/* Dice */
-	*(uint16*) (cart.rom + 0x9F778 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9F798 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9F7B8 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9F7D8 + 6) = 0x007F;
-	*(uint16*) (cart.rom + 0x9F898 + 6) = 0x007F;
-#endif
+		*(uint16*) (cart.rom + 0x9F758 + 6) = 0x007F;	/* Dice */
+		*(uint16*) (cart.rom + 0x9F778 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9F798 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9F7B8 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9F7D8 + 6) = 0x007F;
+		*(uint16*) (cart.rom + 0x9F898 + 6) = 0x007F;
+	}
+// #endif
 
 #if 1  /* WM text - pre-irq delay */
 	*(uint16*)(cart.rom + 0xb9094) = 0x2079;

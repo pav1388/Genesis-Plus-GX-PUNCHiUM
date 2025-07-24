@@ -125,8 +125,9 @@ char CD_BRAM_US[256];
 char CD_BRAM_EU[256];
 char CART_BRAM[256];
 
-uint8_t punchium_tile_cache = 0;
+bool punchium_tile_cache = false;
 uint8_t punchium_audio_track_format = 1;
+bool punchium_cheat_saitama = false;
 
 static int vwidth;
 static int vheight;
@@ -1518,19 +1519,34 @@ static void check_variables(bool first_run)
      }
    }
 
+  var.key = "punchium_cheat_saitama";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+
+  if (var.value)
+  {
+     if (!strcmp(var.value, "enabled"))
+        punchium_cheat_saitama = true;
+     else
+        punchium_cheat_saitama = false;
+  }
+  else
+  {
+     punchium_cheat_saitama = false;
+  }
+  
   var.key = "punchium_tile_cache";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
 
   if (var.value)
   {
      if (!strcmp(var.value, "enabled"))
-        punchium_tile_cache = 1;
+        punchium_tile_cache = true;
      else
-        punchium_tile_cache = 0;
+        punchium_tile_cache = false;
   }
   else
   {
-     punchium_tile_cache = 0;
+     punchium_tile_cache = false;
   }
   
   var.key = "punchium_audio_track_format";

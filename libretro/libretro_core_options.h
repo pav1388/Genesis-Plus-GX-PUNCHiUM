@@ -112,10 +112,24 @@ struct retro_core_option_v2_definition option_defs_us[] = {
       "wav"
    },
    {
+      "punchium_cheat_saitama",
+      "Cheat> One-Hit Kill (Paprium)",
+      NULL,
+      "Instantly defeats any enemy with a single hit. Need to restart game.",
+      NULL,
+      "system",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
+   },
+   {
       "punchium_tile_cache",
       "Tile cache 1 MB (Paprium)",
       NULL,
-      "Enables cache for tiles. +1 MB in PAM",
+      "Enables cache for tiles. +1 MB in PAM.",
       NULL,
       "system",
       {
