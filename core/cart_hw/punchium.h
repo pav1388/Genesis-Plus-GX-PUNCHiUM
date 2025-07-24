@@ -1,66 +1,70 @@
+// punchium.h
+#pragma once
 /*
 Project Little Man
 */
 
+// edit by pav13
+
+#define DEBUG_CHEAT 0
+#define DEBUG_MODE 0
+#define DEBUG_SPRITE 0
+
 #ifdef _WIN32
-#include <windows.h>
-#include <stdio.h>
+    #define FASTCALL __fastcall
+    #include <windows.h>
+    #include <stdio.h>
+    #include <sys/stat.h>
+#elif __vita__
+    #define FASTCALL 
+    #include <psp2/io/stat.h>
+	// #include <psp2/io/fcntl.h>
+#else
+    #define FASTCALL
+    #include <stdio.h>
+    #include <sys/stat.h>
 #endif
 
-
-#define DEBUG_SPRITE 0
-#define DEBUG_MODE 0
-#define DEBUG_CHEAT 0
-
+#define m68k_read_immediate_16(address) *(uint16_t *)(m68k.memory_map[((address)>>16)&0xff].base + ((address) & 0xffff))
+#define m68k_read_immediate_32(address) (m68k_read_immediate_16(address) << 16) | (m68k_read_immediate_16(address+2))
 
 #define MINIMP3_IMPLEMENTATION
 #include "minimp3_ex.h"
 
+#define DR_WAV_IMPLEMENTATION
+#include "dr_wav.h"
 
-static mp3dec_t punchium_mp3d;
-static mp3dec_file_info_t punchium_mp3d_info;
+#define STB_VORBIS_HEADER_ONLY
+#include "stb_vorbis.c"
 
-static mp3dec_t punchium_mp3d_boss1;
-static mp3dec_file_info_t punchium_mp3d_info_boss1;
+#ifdef __arm__ // rand/srand for ARM
+static uint32_t rng_state;
 
-static mp3dec_t punchium_mp3d_boss2;
-static mp3dec_file_info_t punchium_mp3d_info_boss2;
+#define rand() ({ \
+	uint32_t x = rng_state; \
+	x ^= x << 13; \
+	x ^= x >> 17; \
+	x ^= x << 5; \
+	rng_state = x; \
+	x >> 16; \
+})
 
-static mp3dec_t punchium_mp3d_boss3;
-static mp3dec_file_info_t punchium_mp3d_info_boss3;
+#define srand(seed) (rng_state = (uint32_t)(seed))
+#endif
 
-static mp3dec_t punchium_mp3d_boss4;
-static mp3dec_file_info_t punchium_mp3d_info_boss4;
-
-static int punchium_track_last;
-extern char g_rom_dir[256];
-
-
-#define PUNCHIUM_BOSS1 0x17
-#define PUNCHIUM_BOSS2 0x21
-#define PUNCHIUM_BOSS3 0x22
-#define PUNCHIUM_BOSS4 0x23
-
-
-static int skip_boot1 = 1;
-
-
+extern char g_rom_dir[256]; // путь к папке с ROM
 extern T_SRAM sram;
-
-
+extern uint8_t punchium_audio_track_format;
 extern retro_log_printf_t log_cb;
 static char error_str[1024];
-static int punchium_cmd_count = 0;
-
-#define m68k_read_immediate_16(address) *(uint16 *)(m68k.memory_map[((address)>>16)&0xff].base + ((address) & 0xffff))
-#define m68k_read_immediate_32(address) (m68k_read_immediate_16(address) << 16) | (m68k_read_immediate_16(address+2))
-
 
 static uint8 punchium_obj_ram[0x80000];
-static uint8 punchium_wave_ram[0x180000];
+// static uint8 punchium_wave_ram[0x180000];
+static int skip_boot1 = 1;
 
+static int punchium_cmd_count = 0;
 static int punchium_tmss = 1;
-int fast_dma_hack = 0;
+int fast_dma_hack = 0; // ипс. в core/vdp_ctrl.c
 
 static int punchium_music_ptr;
 static int punchium_wave_ptr;
@@ -68,199 +72,321 @@ static int punchium_sfx_ptr;
 static int punchium_tile_ptr;
 static int punchium_sprite_ptr;
 
-
-typedef struct punchium_voice_t
-{
-	int volume;
-	int panning;
-	int flags;
-	int type;
-
-	int size;
-	int ptr;
-	int tick;
-
-	int loop;
-	int echo;
-	int program;
-
-
-	int count;
-
-	int time;
-
-	int start;
-	int num;
-
-	int decay;
-	int decay2;
-	int release;
-	int sustain;
-
-	int duration;
-	int velocity;
-	int keyon;
-	int key_type;
-	int pitch;
-	int cents;
-	int modulation;
+typedef struct punchium_voice_t {
+	int volume, panning, flags, type; // Основные параметры
+	int size, ptr, tick, loop; // Управление воспроизведением
+	int echo, program, count, time; // Эффекты и обработка
+	int start, num, decay, decay2, release, sustain; // Огибающая (envelope)
+	int duration, velocity, keyon, key_type; // Параметры ноты
+	int pitch, cents, modulation; // Тон и модуляции
 } punchium_voice_t;
-
 
 struct punchium_t
 {
-	uint8 ram[0x10000];
-	uint8 decoder_ram[0x10000];
-	uint8 scaler_ram[0x1000];
-	uint8 music_ram[0x8000];
-	uint8 exps_ram[14*8];
-
-	punchium_voice_t sfx[8];
-	punchium_voice_t music[26];
-
+	uint8 ram[0x10000];		  // Основная RAM
+	uint8 decoder_ram[0x10000];   // Буфер декомпрессии
+	uint8 scaler_ram[0x1000];	 // Графический буфер
+	uint8 music_ram[0x8000];	  // Музыкальные данные
+	uint8 exps_ram[14*8];		 // Данные экспаншенов
+	punchium_voice_t sfx[8];		 // SFX-каналы
+	punchium_voice_t music[26];	  // Музыкальные каналы (не используются)
+	// Состояние аудио
 	int music_section, audio_tick, music_segment;
-
-	int out_l, out_r;
+	int out_l, out_r; // Выходной сигнал
 	int audio_flags, sfx_volume, music_volume;
-
+	// Декомпрессия/графика
 	int decoder_mode, decoder_ptr, decoder_size;
-	int draw_src, draw_dst;
-	int obj[0x31];
-
-	int echo_l[48000/4], echo_r[48000/4];
-	int echo_ptr, echo_pan;
-
-	int music_track, mp3_ptr, music_tick;
+	int draw_src, draw_dst; // Графические буферы
+	int obj[0x31]; // Объекты
+	// Эффекты
+	int echo_l[48000/4], echo_r[48000/4]; // Эхо-буферы
+	int echo_ptr, echo_pan; // Параметры эхо
+	
+	// Управление треками
+	int8_t music_track;			 // Номер трека
+	int music_tick;				 // Тик музыки
+	int music_pos;				  // Позиция воспроизведения
 } punchium_s;
 
+struct punchium_track_t {
+	int sync_tick;				// Коэффициент синхронизации
+	int8_t track_last;			  // Текущий трек
+	// Форматы аудио
+	int8_t file_type;			   // mp3/wav/ogg
+	int16_t *buffer;				// PCM-данные (L/R)
+	uint16_t sample_rate;		   // 48000, 44100 и т.д.
+	uint16_t channels;			  // 1 (моно) или 2 (стерео)
+	uint32_t total_samples;		 // Всего сэмплов (на канал)
+	// Декодеры
+	mp3dec_t mp3;				   // MP3-декодер
+	mp3dec_file_info_t mp3_info;	// Инфо MP3
+	drwav wav;					  // WAV-декодер
+	stb_vorbis *vorbis;			 // OGG-декодер
+	stb_vorbis_info vorbis_info;	// Инфо OGG
+	int samples_read;			   // Прочитано сэмплов
+} punchium_track;
 
-uint8 punchium_volume_table[256] =
+uint8 punchium_volume_table[256] = // Логарифмическая кривая уровня громкости
 {
-    0x00, 0x03, 0x07, 0x0B, 0x0E, 0x12, 0x15, 0x18, 0x1B, 0x1E, 0x21, 0x24, 0x27, 0x29, 0x2C, 0x2F, 
-    0x31, 0x34, 0x36, 0x38, 0x3B, 0x3D, 0x3F, 0x41, 0x44, 0x46, 0x48, 0x4A, 0x4C, 0x4E, 0x50, 0x51, 
-    0x53, 0x55, 0x57, 0x59, 0x5A, 0x5C, 0x5E, 0x5F, 0x61, 0x63, 0x64, 0x66, 0x67, 0x69, 0x6A, 0x6C, 
-    0x6D, 0x6F, 0x70, 0x72, 0x73, 0x74, 0x76, 0x77, 0x78, 0x7A, 0x7B, 0x7C, 0x7E, 0x7F, 0x80, 0x81, 
-    0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F, 0x90, 0x91, 0x92, 0x93, 
-    0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 
-    0xA4, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xAF, 0xB0, 
-    0xB1, 0xB2, 0xB3, 0xB3, 0xB4, 0xB5, 0xB6, 0xB6, 0xB7, 0xB8, 0xB9, 0xB9, 0xBA, 0xBB, 0xBC, 0xBC, 
-    0xBD, 0xBE, 0xBE, 0xBF, 0xC0, 0xC1, 0xC1, 0xC2, 0xC3, 0xC3, 0xC4, 0xC5, 0xC5, 0xC6, 0xC7, 0xC7, 
-    0xC8, 0xC9, 0xC9, 0xCA, 0xCA, 0xCB, 0xCC, 0xCC, 0xCD, 0xCE, 0xCE, 0xCF, 0xCF, 0xD0, 0xD1, 0xD1, 
-    0xD2, 0xD2, 0xD3, 0xD3, 0xD4, 0xD5, 0xD5, 0xD6, 0xD6, 0xD7, 0xD7, 0xD8, 0xD9, 0xD9, 0xDA, 0xDA, 
-    0xDB, 0xDB, 0xDC, 0xDC, 0xDD, 0xDD, 0xDE, 0xDF, 0xDF, 0xE0, 0xE0, 0xE1, 0xE1, 0xE2, 0xE2, 0xE3, 
-    0xE3, 0xE4, 0xE4, 0xE5, 0xE5, 0xE6, 0xE6, 0xE7, 0xE7, 0xE8, 0xE8, 0xE9, 0xE9, 0xEA, 0xEA, 0xEA, 
-    0xEB, 0xEB, 0xEC, 0xEC, 0xED, 0xED, 0xEE, 0xEE, 0xEF, 0xEF, 0xF0, 0xF0, 0xF0, 0xF1, 0xF1, 0xF2, 
-    0xF2, 0xF3, 0xF3, 0xF4, 0xF4, 0xF4, 0xF5, 0xF5, 0xF6, 0xF6, 0xF7, 0xF7, 0xF7, 0xF8, 0xF8, 0xF9, 
-    0xF9, 0xF9, 0xFA, 0xFA, 0xFB, 0xFB, 0xFC, 0xFC, 0xFC, 0xFD, 0xFD, 0xFE, 0xFE, 0xFE, 0xFF, 0xFF, 
+	0x00, 0x03, 0x07, 0x0B, 0x0E, 0x12, 0x15, 0x18, 0x1B, 0x1E, 0x21, 0x24, 0x27, 0x29, 0x2C, 0x2F, 
+	0x31, 0x34, 0x36, 0x38, 0x3B, 0x3D, 0x3F, 0x41, 0x44, 0x46, 0x48, 0x4A, 0x4C, 0x4E, 0x50, 0x51, 
+	0x53, 0x55, 0x57, 0x59, 0x5A, 0x5C, 0x5E, 0x5F, 0x61, 0x63, 0x64, 0x66, 0x67, 0x69, 0x6A, 0x6C, 
+	0x6D, 0x6F, 0x70, 0x72, 0x73, 0x74, 0x76, 0x77, 0x78, 0x7A, 0x7B, 0x7C, 0x7E, 0x7F, 0x80, 0x81, 
+	0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F, 0x90, 0x91, 0x92, 0x93, 
+	0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 
+	0xA4, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xAF, 0xB0, 
+	0xB1, 0xB2, 0xB3, 0xB3, 0xB4, 0xB5, 0xB6, 0xB6, 0xB7, 0xB8, 0xB9, 0xB9, 0xBA, 0xBB, 0xBC, 0xBC, 
+	0xBD, 0xBE, 0xBE, 0xBF, 0xC0, 0xC1, 0xC1, 0xC2, 0xC3, 0xC3, 0xC4, 0xC5, 0xC5, 0xC6, 0xC7, 0xC7, 
+	0xC8, 0xC9, 0xC9, 0xCA, 0xCA, 0xCB, 0xCC, 0xCC, 0xCD, 0xCE, 0xCE, 0xCF, 0xCF, 0xD0, 0xD1, 0xD1, 
+	0xD2, 0xD2, 0xD3, 0xD3, 0xD4, 0xD5, 0xD5, 0xD6, 0xD6, 0xD7, 0xD7, 0xD8, 0xD9, 0xD9, 0xDA, 0xDA, 
+	0xDB, 0xDB, 0xDC, 0xDC, 0xDD, 0xDD, 0xDE, 0xDF, 0xDF, 0xE0, 0xE0, 0xE1, 0xE1, 0xE2, 0xE2, 0xE3, 
+	0xE3, 0xE4, 0xE4, 0xE5, 0xE5, 0xE6, 0xE6, 0xE7, 0xE7, 0xE8, 0xE8, 0xE9, 0xE9, 0xEA, 0xEA, 0xEA, 
+	0xEB, 0xEB, 0xEC, 0xEC, 0xED, 0xED, 0xEE, 0xEE, 0xEF, 0xEF, 0xF0, 0xF0, 0xF0, 0xF1, 0xF1, 0xF2, 
+	0xF2, 0xF3, 0xF3, 0xF4, 0xF4, 0xF4, 0xF5, 0xF5, 0xF6, 0xF6, 0xF7, 0xF7, 0xF7, 0xF8, 0xF8, 0xF9, 
+	0xF9, 0xF9, 0xFA, 0xFA, 0xFB, 0xFB, 0xFC, 0xFC, 0xFC, 0xFD, 0xFD, 0xFE, 0xFE, 0xFE, 0xFF, 0xFF, 
 };
 
+static void punchium_decoder_type(int src, uint8 *dst);
 
-static void punchium_load_mp3(int track, int reload)
-{
-	static char name[512];
+//инициализация музыкальных переменных и буферов
+static void music_var_init (){
+	punchium_s.music_track = 0;
+	punchium_s.music_tick = 0;
+	punchium_s.music_pos = 0;
+	punchium_track.sync_tick = 0;
+	punchium_track.track_last = 0;
+	punchium_track.channels = 2;
+	punchium_track.file_type = 0;
+	punchium_track.sample_rate = 0;
+	punchium_track.total_samples = 0;
+	punchium_track.buffer = NULL;
+	mp3dec_init(&punchium_track.mp3);
+	memset(&punchium_track.mp3_info, 0, sizeof(mp3dec_file_info_t));
+	memset(&punchium_track.wav, 0, sizeof(drwav));
+	punchium_track.vorbis = NULL;
+	memset(&punchium_track.vorbis_info, 0, sizeof(stb_vorbis_info));
+	punchium_track.samples_read = 0;
+}
 
-	punchium_s.music_track = track;
-
-#ifdef _WIN32
-	sprintf(error_str, "%s\\paprium\\", g_rom_dir);
+// проверка наличия файла
+static inline int punchium_file_exists(const char *path) {
+#ifdef __vita__
+    SceIoStat stat;
+    return (sceIoGetstat(path, &stat) >= 0);
 #else
-	sprintf(error_str, "%s/paprium/", g_rom_dir);
+	struct stat buffer;
+	return (stat(path, &buffer) == 0);
 #endif
+}
 
-	switch(track) {
-	case 0x01: sprintf(name, "%s02 90's Acid Dub Character Select.mp3", error_str); break;
-	case 0x02: sprintf(name, "%s08 90's Dance.mp3", error_str); break;
-	case 0x03: sprintf(name, "%s42 1988 Commercial.mp3", error_str); break;
-	case 0x04: sprintf(name, "%s05 Asian Chill.mp3", error_str); break;
-	case 0x05: sprintf(name, "%s31 Bad Dudes vs Paprium.mp3", error_str); break;
-	case 0x06: sprintf(name, "%s43 Blade FM.mp3", error_str); break;
-	case 0x07: sprintf(name, "%s03 Bone Crusher.mp3", error_str); break;
-	case 0x0B: sprintf(name, "%s26 Club Shuffle.mp3", error_str); break;
-	case 0x0C: sprintf(name, "%s23 Continue.mp3", error_str); break;  /* Continue Fast */
-	case 0x0E: sprintf(name, "%s07 Cool Groove.mp3", error_str); break;
-	case 0x0F: sprintf(name, "%s36 Cyberpunk Ninja.mp3", error_str); break;
-	case 0x10: sprintf(name, "%s35 Cyberpunk Funk.mp3", error_str); break;
-	case 0x11: sprintf(name, "%s30 Cyber Interlude.mp3", error_str); break;
-	case 0x12: sprintf(name, "%s21 Cyborg Invasion.mp3", error_str); break;
-	case 0x13: sprintf(name, "%s44 Dark Alley.mp3", error_str); break;
-	case 0x14: sprintf(name, "%s29 Dark & Power Mad.mp3", error_str); break;
-	case 0x15: sprintf(name, "%s24 Intro.mp3", error_str); break;  /* Dark Bounce */
-	case 0x16: sprintf(name, "%s27 Dark Rock.mp3", error_str); break;
-	case 0x17: sprintf(name, "%s04 Drumbass Boss.mp3", error_str); break;
-	case 0x18: sprintf(name, "%s45 Dubstep Groove.mp3", error_str); break;
-	case 0x19: sprintf(name, "%s15 Electro Acid Funk.mp3", error_str); break;
-	case 0x1B: sprintf(name, "%s28 Evolve.mp3", error_str); break;
-	case 0x1C: sprintf(name, "%s33 Funk Enhanced Mix.mp3", error_str); break;
-	case 0x1D: sprintf(name, "%s41 Game Over.mp3", error_str); break;
-	case 0x1E: sprintf(name, "%s46 Gothic.mp3", error_str); break;
-	case 0x20: sprintf(name, "%s13 Hard Rock.mp3", error_str); break;
-	case 0x21: sprintf(name, "%s22 Hardcore BP1.mp3", error_str); break;
-	case 0x22: sprintf(name, "%s11 Hardcore BP2.mp3", error_str); break;
-	case 0x23: sprintf(name, "%s38 Hardcore BP3.mp3", error_str); break;
-	case 0x24: sprintf(name, "%s40 Score.mp3", error_str); break;  /* High Score */
-	case 0x25: sprintf(name, "%s47 House.mp3", error_str); break;
-	case 0x26: sprintf(name, "%s17 Indie Shuffle.mp3", error_str); break;
-	case 0x27: sprintf(name, "%s25 Indie Break Beat.mp3", error_str); break;
-	case 0x28: sprintf(name, "%s16 Jazzy Shuffle.mp3", error_str); break;
-	case 0x2A: sprintf(name, "%s19 Neo Metal.mp3", error_str); break;
-	case 0x2B: sprintf(name, "%s14 Neon Rider.mp3", error_str); break;
-	case 0x2E: sprintf(name, "%s09 Retro Beat.mp3", error_str); break;
-	case 0x2F: sprintf(name, "%s20 Sadness.mp3", error_str); break;
-	case 0x31: sprintf(name, "%s18 Slow Asian Beat.mp3", error_str); break;
-	case 0x32: sprintf(name, "%s48 Slow Mood.mp3", error_str); break;  /* Slow Mood Ext. ? */
-	case 0x33: sprintf(name, "%s49 Smooth Coords.mp3", error_str); break;
-	case 0x34: sprintf(name, "%s10 Spiral.mp3", error_str); break;
-	case 0x35: sprintf(name, "%s12 Stage Clear.mp3", error_str); break;
-	case 0x36: sprintf(name, "%s32 Summer Breeze.mp3", error_str); break;
-	case 0x37: sprintf(name, "%s06 Techno Beats.mp3", error_str); break;
-	case 0x38: sprintf(name, "%s50 Tension.mp3", error_str); break;
-	case 0x39: sprintf(name, "%s01 Theme of Paprium.mp3", error_str); break;
-	case 0x3A: sprintf(name, "%s39 Ending.mp3", error_str); break;  /* Tough Guy */
-	case 0x3B: sprintf(name, "%s34 Transe.mp3", error_str); break;
-	case 0x3C: sprintf(name, "%s37 Urban.mp3", error_str); break;
-	case 0x3D: sprintf(name, "%s51 Water.mp3", error_str); break;
-	case 0x3E: sprintf(name, "%s52 Waterfront Beat.mp3", error_str); break;
-	default: punchium_s.music_track = 0; return;
+// Загружает и декодирует трек (из папки `punchium/`), настраивает частоту дискретизации.
+static void punchium_load_music_file(int track, int reload) {
+	punchium_s.music_track = track;
+	
+	if (track == punchium_track.track_last) {
+		if (reload) {
+			punchium_s.music_pos = 0;
+			punchium_s.music_tick = 0;
+		}
+		
+		return;
+	}
+	
+	punchium_track.track_last = track;
+	
+	if (!punchium_audio_track_format) {
+		punchium_s.music_track = 0;
+		return;
+	}
+	
+	// Очистка памяти от предыдущего трека
+	if (punchium_track.buffer) {
+		free(punchium_track.buffer);
+		punchium_track.buffer = NULL;
+	}
+	
+	memset(&punchium_track.mp3, 0, sizeof(mp3dec_t));
+	memset(&punchium_track.mp3_info, 0, sizeof(mp3dec_file_info_t));
+	drwav_uninit(&punchium_track.wav);
+	memset(&punchium_track.wav, 0, sizeof(drwav));
+	
+	if (punchium_track.vorbis) {
+		stb_vorbis_close(punchium_track.vorbis);
+		punchium_track.vorbis = NULL;
+	}
+	
+	static const char* track_names[] = {
+		[0x01] = "02 90's Acid Dub Character Select", [0x02] = "08 90's Dance", [0x03] = "42 1988 Commercial",
+		[0x04] = "05 Asian Chill", [0x05] = "31 Bad Dudes vs Paprium", [0x06] = "43 Blade FM",
+		[0x07] = "03 Bone Crusher", [0x0B] = "26 Club Shuffle", [0x0C] = "23 Continue",
+		[0x0E] = "07 Cool Groove", [0x0F] = "36 Cyberpunk Ninja", [0x10] = "35 Cyberpunk Funk",
+		[0x11] = "30 Cyber Interlude", [0x12] = "21 Cyborg Invasion", [0x13] = "44 Dark Alley",
+		[0x14] = "29 Dark & Power Mad", [0x15] = "24 Intro", [0x16] = "27 Dark Rock",
+		[0x17] = "04 Drumbass Boss", [0x18] = "45 Dubstep Groove", [0x19] = "15 Electro Acid Funk",
+		[0x1B] = "28 Evolve", [0x1C] = "33 Funk Enhanced Mix", [0x1D] = "41 Game Over",
+		[0x1E] = "46 Gothic", [0x20] = "13 Hard Rock", [0x21] = "22 Hardcore BP1",
+		[0x22] = "11 Hardcore BP2", [0x23] = "38 Hardcore BP3", [0x24] = "40 Score",
+		[0x25] = "47 House", [0x26] = "17 Indie Shuffle", [0x27] = "25 Indie Break Beat",
+		[0x28] = "16 Jazzy Shuffle", [0x2A] = "19 Neo Metal", [0x2B] = "14 Neon Rider",
+		[0x2E] = "09 Retro Beat", [0x2F] = "20 Sadness", [0x31] = "18 Slow Asian Beat",
+		[0x32] = "48 Slow Mood", [0x33] = "49 Smooth Coords", [0x34] = "10 Spiral",
+		[0x35] = "12 Stage Clear", [0x36] = "32 Summer Breeze", [0x37] = "06 Techno Beats",
+		[0x38] = "50 Tension", [0x39] = "01 Theme of Paprium", [0x3A] = "39 Ending",
+		[0x3B] = "34 Transe", [0x3C] = "37 Urban", [0x3D] = "51 Water",
+		[0x3E] = "52 Waterfront Beat"};
+
+	if (track < 0x01 || track > 0x3E || !track_names[track]) {
+		punchium_s.music_track = 0;
+		return;
 	}
 
-	if( reload )
-		punchium_s.mp3_ptr = 0;
-
-	punchium_s.music_tick = 0;
-
-	if( track != PUNCHIUM_BOSS1 && track != PUNCHIUM_BOSS2 && track != PUNCHIUM_BOSS3 && track != PUNCHIUM_BOSS4 ) {
-		if( mp3dec_load(&punchium_mp3d, name, &punchium_mp3d_info, NULL, NULL) ) {
-			punchium_s.music_track = 0;
-			return;
+	char temp_path[512];
+#ifdef _WIN32
+	snprintf(temp_path, sizeof(temp_path), "%s\\paprium\\%s", g_rom_dir, track_names[track]);
+#else
+	snprintf(temp_path, sizeof(temp_path), "%s/paprium/%s", g_rom_dir, track_names[track]);
+#endif
+	
+	bool track_loaded = false;
+	uint8_t formats_to_try[] = {0, 1, 2, 3};
+	formats_to_try[0] = punchium_audio_track_format;
+	
+	for (int i = 0; i < 5 && !track_loaded; i++) {
+		uint8_t fmt = formats_to_try[i];
+		if (fmt == 0) return;
+		
+		char full_path[512];
+		strcpy(full_path, temp_path);
+		
+		switch (fmt) {
+		// WAV
+			case 1:
+				strcat(full_path, ".wav");
+				if (!punchium_file_exists(full_path)) {
+					continue;
+				}
+				
+				if (!drwav_init_file(&punchium_track.wav, full_path, NULL)) {
+					continue;
+				}
+				
+				if (punchium_track.wav.totalPCMFrameCount == 0) {
+					drwav_uninit(&punchium_track.wav);
+					continue;
+				}
+				
+				punchium_track.channels = punchium_track.wav.channels;
+				punchium_track.total_samples = punchium_track.wav.totalPCMFrameCount;
+				punchium_track.sample_rate = punchium_track.wav.fmt.sampleRate;
+				punchium_track.buffer = (int16_t*)malloc(punchium_track.total_samples * punchium_track.channels * sizeof(int16_t));
+				
+				if (!punchium_track.buffer) {
+					drwav_uninit(&punchium_track.wav);
+					continue;
+				}
+				
+				drwav_read_pcm_frames_s16(&punchium_track.wav, punchium_track.wav.totalPCMFrameCount, punchium_track.buffer);
+				track_loaded = true;
+				break;
+		
+		// MP3		
+			case 2:
+				strcat(full_path, ".mp3");
+				if (!punchium_file_exists(full_path)) {
+					continue;
+				}
+				
+				if (mp3dec_load(&punchium_track.mp3, full_path, &punchium_track.mp3_info, NULL, NULL)) {
+					punchium_track.buffer = NULL;
+					continue;
+				}
+				
+				if (punchium_track.mp3_info.buffer == NULL || punchium_track.mp3_info.samples == 0) {
+					continue;
+				}
+				
+				punchium_track.buffer = punchium_track.mp3_info.buffer;
+				punchium_track.total_samples = punchium_track.mp3_info.samples / punchium_track.mp3_info.channels;
+				punchium_track.channels = punchium_track.mp3_info.channels;
+				punchium_track.sample_rate = punchium_track.mp3_info.hz;
+				track_loaded = true;
+				break;
+		
+		// OGG
+			case 3:
+				strcat(full_path, ".ogg");
+				if (!punchium_file_exists(full_path)) {
+					continue;
+				}
+							
+				int error = 0;
+				punchium_track.vorbis = stb_vorbis_open_filename(full_path, &error, NULL);
+				if (!punchium_track.vorbis) {
+					continue;
+				}
+				
+				punchium_track.vorbis_info = stb_vorbis_get_info(punchium_track.vorbis);
+				punchium_track.sample_rate = punchium_track.vorbis_info.sample_rate;
+				punchium_track.channels = punchium_track.vorbis_info.channels;
+				punchium_track.total_samples = stb_vorbis_stream_length_in_samples(punchium_track.vorbis);
+				size_t total_samples = punchium_track.total_samples * punchium_track.channels;
+				punchium_track.buffer = (short*)malloc(total_samples * sizeof(short));
+				
+				if (!punchium_track.buffer) {
+					stb_vorbis_close(punchium_track.vorbis);
+					punchium_track.vorbis = NULL;
+					continue;
+				}
+				punchium_track.samples_read = stb_vorbis_get_samples_short_interleaved(
+					punchium_track.vorbis, 
+					punchium_track.channels, 
+					punchium_track.buffer, 
+					total_samples);
+				
+				stb_vorbis_close(punchium_track.vorbis);
+				punchium_track.vorbis = NULL;
+				
+				if (punchium_track.samples_read <= 0) {
+					free(punchium_track.buffer);
+					punchium_track.buffer = NULL;
+					punchium_track.vorbis = NULL;
+					continue;
+				}
+				
+				track_loaded = true;
+				break;
 		}
 	}
+	
+	if (!track_loaded) {
+		punchium_s.music_track = 0;
+		return;
+	}
+	
+	switch (punchium_track.sample_rate) {
+		case 48000: punchium_track.sync_tick = 0x10000; break;
+		case 44100: punchium_track.sync_tick = 0xE666;  break;
+		case 32000: punchium_track.sync_tick = 0xAAAA;  break;
+		case 24000: punchium_track.sync_tick = 0x8000;  break;
+		case 22050: punchium_track.sync_tick = 0x75C3;  break;
+		case 16000: punchium_track.sync_tick = 0x5555;  break;
+		case 12000: punchium_track.sync_tick = 0x4000;  break;
+		case 11025: punchium_track.sync_tick = 0x3AE1;  break;
+		case 8000:  punchium_track.sync_tick = 0x2AAA;  break;
+		default: 
+			if (punchium_track.sample_rate >= 0) {
+				punchium_track.sync_tick = ((punchium_track.sample_rate * 0x10000) + 24000) / 48000;
+			} else {
+				punchium_track.sync_tick = 0x10000;
+			}
+			break;
+	}
+	
+	punchium_s.music_tick = 0;
+	punchium_s.music_pos = 0;
 }
 
-
-static void punchium_load_mp3_boss()
-{
-	static char name[512];
-
-#ifdef _WIN32
-	sprintf(error_str, "%s\\punchium\\", g_rom_dir);
-#else
-	sprintf(error_str, "%s/punchium/", g_rom_dir);
-#endif
-
-	sprintf(name, "%s04 Drumbass Boss.mp3", error_str);
-	mp3dec_load(&punchium_mp3d_boss1, name, &punchium_mp3d_info_boss1, NULL, NULL);
-
-	sprintf(name, "%s22 Hardcore BP1.mp3", error_str);
-	mp3dec_load(&punchium_mp3d_boss2, name, &punchium_mp3d_info_boss2, NULL, NULL);
-
-	sprintf(name, "%s11 Hardcore BP2.mp3", error_str);
-	mp3dec_load(&punchium_mp3d_boss3, name, &punchium_mp3d_info_boss3, NULL, NULL);
-
-	sprintf(name, "%s38 Hardcore BP3.mp3", error_str);
-	mp3dec_load(&punchium_mp3d_boss4, name, &punchium_mp3d_info_boss4, NULL, NULL);
-}
-
-
+// Обрабатывает "нотный лист" (MIDI-подобные команды) для управления инструментами.
 static void punchium_music_sheet()
 {
 	int ch;
@@ -291,29 +417,12 @@ static void punchium_music_sheet()
 		return;
 	punchium_s.audio_tick = 0;
 
-
-#if 0
-	sprintf(error_str, "Music_Sheet %X %X - %X %X\n", punchium_s.music_segment, punchium_s.music_section, sections, bars);
-	log_cb(RETRO_LOG_ERROR, error_str);
-#endif
-
-
 	for( ch = 0; ch < 26; ch++ ) {
 		int ptr = *(uint16*)(punchium_s.music_ram + 0xD8 + (ch*sections*2) + (punchium_s.music_segment*2));
 		int index = punchium_s.music_ram[(ptr + punchium_s.music_section)^1];
 		int code = 0, arg = 0;
 		int keyon = 0, duration = 0, freq = -1, volume = 0;
 		punchium_voice_t *voice = punchium_s.music + ch;
-
-
-#if 0
-//if(ch == 0) {
-{
-	sprintf(error_str, "[%d] Music %X %X %X = %X\n", ch, ptr, ptr + punchium_s.music_section, index, (index == 0) ? 0 : ptr + bars + ((index-1)*8) + punchium_s.music_section*2);
-	log_cb(RETRO_LOG_ERROR, error_str);
-}
-#endif
-
 
 		if( index == 0 )
 			goto next;
@@ -349,7 +458,7 @@ static void punchium_music_sheet()
 
 			else if( code == 0x08 ) {
 #if 0
-				sprintf(error_str, "08 - %X %X %X\n", ch, ptr, arg);
+				snprintf(error_str, "08 - %X %X %X\n", ch, ptr, arg);
 				log_cb(RETRO_LOG_ERROR, error_str);
 				//MessageBoxA(0, error_str, "---", 0);
 #endif
@@ -359,7 +468,7 @@ static void punchium_music_sheet()
 
 			else if( code == 0x0A ) {
 #if 0
-				sprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
+				snprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
 				log_cb(RETRO_LOG_ERROR, error_str);
 				//MessageBoxA(0, error_str, "---", 0);
 #endif			
@@ -368,7 +477,7 @@ static void punchium_music_sheet()
 
 			else if( code == 0x0B ) {
 #if 0
-				sprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
+				snprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
 				log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 				//MessageBoxA(0, error_str, "---", 0);
@@ -376,7 +485,7 @@ static void punchium_music_sheet()
 
 			else if( code == 0x0C ) {
 #if 0
-				sprintf(error_str, "0C - %X %X %X\n", ch, ptr, arg);
+				snprintf(error_str, "0C - %X %X %X\n", ch, ptr, arg);
 				log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 				//MessageBoxA(0, error_str, "---", 0);
@@ -401,7 +510,7 @@ static void punchium_music_sheet()
 				}
 
 #if DEBUG_MODE
-				sprintf(error_str, "[%d] Sample %X %X\n", ch, arg, ptr);
+				snprintf(error_str, "[%d] Sample %X %X\n", ch, arg, ptr);
 				log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 			}
@@ -429,7 +538,7 @@ static void punchium_music_sheet()
 
 		if( freq >= 0 ) {
 			voice->type = freq;
-			//if(ch == 16-1) MessageBoxA(0,"hit","-",0);
+			//if(ch == 16-1) //MessageBoxA(0,"hit","-",0);
 		}
 
 next:
@@ -447,334 +556,161 @@ end:
 	}
 }
 
+// Генерирует аудио из декодированного файла с учетом громкости/панорамирования.
+static void punchium_music_player(int *out_l, int *out_r) {
+	if (punchium_s.music_track == 0 || punchium_track.buffer == NULL)
+		return;
 
-static void punchium_music_synth(int *out_l, int *out_r)
-{
-	int ch;
+	if (punchium_s.music_pos >= punchium_track.total_samples)
+		punchium_s.music_pos = 0;
+	
 	int l = 0, r = 0;
+	int sample_pos = punchium_s.music_pos * punchium_track.channels;
 
-
-#if 1
-	if( punchium_s.music_track ) {
-		if( punchium_s.music_track == PUNCHIUM_BOSS1 ) {
-			l = punchium_mp3d_info_boss1.buffer[punchium_s.mp3_ptr];
-			r = punchium_mp3d_info_boss1.buffer[punchium_s.mp3_ptr];
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS2 ) {
-			l = punchium_mp3d_info_boss2.buffer[punchium_s.mp3_ptr];
-			r = punchium_mp3d_info_boss2.buffer[punchium_s.mp3_ptr];
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS3 ) {
-			l = punchium_mp3d_info_boss3.buffer[punchium_s.mp3_ptr];
-			r = punchium_mp3d_info_boss3.buffer[punchium_s.mp3_ptr];
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS4 ) {
-			l = punchium_mp3d_info_boss4.buffer[punchium_s.mp3_ptr];
-			r = punchium_mp3d_info_boss4.buffer[punchium_s.mp3_ptr];
-		}
-		else {
-			l = punchium_mp3d_info.buffer[punchium_s.mp3_ptr];
-			r = punchium_mp3d_info.buffer[punchium_s.mp3_ptr];
-		}
-
-
-		l = (l * punchium_s.music_volume) / 256;
-		r = (r * punchium_s.music_volume) / 256;
-
-
-		punchium_s.music_tick += 0x10000;
-		if( punchium_s.music_tick >= 0x10000 ) {
-			punchium_s.music_tick -= 0x10000;
-
-			punchium_s.mp3_ptr += 2;
-		}
-
-
-		if( punchium_s.music_track == PUNCHIUM_BOSS1 ) {
-			if( punchium_s.mp3_ptr >= punchium_mp3d_info_boss1.samples)
-				punchium_s.mp3_ptr -= punchium_mp3d_info_boss1.samples;
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS2 ) {
-			if( punchium_s.mp3_ptr >= punchium_mp3d_info_boss2.samples)
-				punchium_s.mp3_ptr -= punchium_mp3d_info_boss2.samples;
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS3 ) {
-			if( punchium_s.mp3_ptr >= punchium_mp3d_info_boss3.samples)
-				punchium_s.mp3_ptr -= punchium_mp3d_info_boss3.samples;
-		}
-		else if( punchium_s.music_track == PUNCHIUM_BOSS4 ) {
-			if( punchium_s.mp3_ptr >= punchium_mp3d_info_boss4.samples)
-				punchium_s.mp3_ptr -= punchium_mp3d_info_boss4.samples;
-		}
-		else {
-			if( punchium_s.mp3_ptr >= punchium_mp3d_info.samples)
-				punchium_s.mp3_ptr -= punchium_mp3d_info.samples;
-		}
+	if (sample_pos < punchium_track.total_samples * punchium_track.channels) {
+		l = punchium_track.buffer[sample_pos];
+		r = (punchium_track.channels > 1) ? punchium_track.buffer[sample_pos + 1] : l;
+	}
+		
+	punchium_s.music_tick += punchium_track.sync_tick;
+	if (punchium_s.music_tick >= 0x10000) {
+		punchium_s.music_tick -= 0x10000;
+		punchium_s.music_pos++;
 	}
 
-	*out_l = l;
-	*out_r = r;
-
-	return;
-#endif
-
-
-	for( ch = 0; ch < 26; ch++ ) {
-		punchium_voice_t *voice = punchium_s.music + ch;
-		const int _rates[] = {2,4,5,8,9,10};  /* 24000 ?, 12000, 9600, 6000, 5333-?, 4800-? */
-
-		int rate = _rates[voice->type] << 16;  /* 16.16 */
-		int vol = voice->volume;
-		int pan = voice->panning;
-
-		int sample, sample_l, sample_r;
-
-
-		//if( ch < 15-1 || ch > 17-1 ) goto next;
-
-#if 0
-		if( ch == 20 ) {
-			sprintf(error_str, "[%d] %X %X\n", ch, voice->ptr, voice->size);
-			log_cb(RETRO_LOG_ERROR, error_str);
-		}
-		else
-			goto next;
-#endif
-
-
-		if( ((punchium_s.audio_tick % 4) == 0) && voice->duration) {
-			//voice->duration--;
-			if( voice->duration == 0 ) {
-				if( voice->keyon == 1 )  /* hard off */
-					voice->size = 0;
-			}
-		}
-
-
-		if( voice->size == 0 ) goto next;
-
-
-		sample = *(uint8 *)(punchium_wave_ram + (voice->ptr^1));
-
-		sample = (((sample & 0xFF) * 65536) / 256) - 32768;
-		sample = (sample * vol) / 0x300;
-
-		sample_l = (sample * ((pan <= 0x80) ? 0x80 : 0x100 - pan)) / 0x80;
-		sample_r = (sample * ((pan >= 0x80) ? 0x80 : pan)) / 0x80;
-
-		l += sample_l;
-		r += sample_r;
-
-
-		voice->time++;
-		voice->tick += 0x10000;
-
-
-		if( voice->tick >= rate ) {
-			voice->tick -= rate;
-
-			voice->size--;
-			voice->ptr++;
-		}
-
-
-next:;
-	}
-
-
-	*out_l += l;
-	*out_r += r;
+	*out_l += (l * punchium_volume_table[punchium_s.music_volume]) >> 8;
+	*out_r += (r * punchium_volume_table[punchium_s.music_volume]) >> 8;
 }
 
 
-static void punchium_sfx_voice(int *out_l, int *out_r)
-{
-	int ch;
-	int l = 0, r = 0;
+static void punchium_sfx_voice(int *out_l, int *out_r) {
+    static const int _rates[] = {1 << 16, 2 << 16, 4 << 16, 5 << 16, 8 << 16, 9 << 16};
+    int l = 0, r = 0;
 
-	for( ch = 0; ch < 8; ch++ ) {
-		punchium_voice_t *voice = punchium_s.sfx + ch;
-		const int _rates[] = {1,2,4,5,8,9};  /* 48000, 24000, 12000, 9600, 6000, 5333 */
+    for (int ch = 0; ch < 8; ch++) {
+        punchium_voice_t *voice = punchium_s.sfx + ch;
+        if (voice->size == 0) continue;
 
-		int rate = _rates[voice->type >> 4] << 16;  /* 16.16 */
-		int depth = voice->type & 0x03;
-		/* voice->type & 0xC0; */
+        // Чтение сэмпла (оригинальный способ)
+        uint8 sample_byte = *(uint8 *)(cart.rom + punchium_sfx_ptr + (voice->ptr ^ 1));
+        int sample;
 
-		int vol = voice->volume;
-		int pan = voice->panning;
+        // Обработка глубины звука (как в оригинале)
+        int depth = voice->type & 0x03;
+        if (depth == 1) {
+            sample = (sample_byte * 256) - 32768;  // 8-бит -> 16-бит со знаком
+        } else if (depth == 2) {
+            sample = (voice->count == 0) ? (sample_byte >> 4) : (sample_byte & 0x0F);
+            sample = (sample * 4096) - 32768;  // 4-бит -> 16-бит со знаком
+        } else {
+            sample = 0;  // Неподдерживаемый формат
+        }
 
-		int sample, sample_l, sample_r;
+        // Применение громкости (деление, как в оригинале)
+        sample = (sample * voice->volume) / 0x400;
 
+        // Панорамирование (деление, а не сдвиг!)
+        int pan = voice->panning;
+        int sample_l = (sample * ((pan <= 0x80) ? 0x80 : (0x100 - pan))) / 0x80;
+        int sample_r = (sample * ((pan >= 0x80) ? 0x80 : pan)) / 0x80;
 
-		if( voice->size == 0 ) goto next;
+        l += sample_l;
+        r += sample_r;
 
+        // Эхо-эффект (как в оригинале)
+        if (voice->flags & 0x4000) {
+            if (voice->echo & 1) {
+                punchium_s.echo_l[punchium_s.echo_ptr % (48000/6)] += (sample_l * 33) / 100;
+            } else {
+                punchium_s.echo_r[punchium_s.echo_ptr % (48000/6)] += (sample_r * 33) / 100;
+            }
+        }
 
-		sample = *(uint8 *)(cart.rom + punchium_sfx_ptr + (voice->ptr^1));
-
-		if( depth == 1 )
-			sample = (((sample & 0xFF) * 65536) / 256) - 32768;
-
-		else if( depth == 2 ) {
-			if( voice->count == 0 )
-				sample >>= 4;
-
-			sample = (((sample & 0x0F) * 65536) / 16) - 32768;
-		}
-
-
-		sample = (sample * vol) / 0x400;
-
-		sample_l = (sample * ((pan <= 0x80) ? 0x80 : 0x100 - pan)) / 0x80;
-		sample_r = (sample * ((pan >= 0x80) ? 0x80 : pan)) / 0x80;
-
-		l += sample_l;
-		r += sample_r;
-
-
-		if( voice->flags & 0x4000 ) {  /* echo */
-			if( voice->echo & 1 )
-				punchium_s.echo_l[punchium_s.echo_ptr % (48000/6)] += (sample_l * 33) / 100;
-			else
-				punchium_s.echo_r[punchium_s.echo_ptr % (48000/6)] += (sample_r * 33) / 100;
-		}
-
-
-		if( voice->flags & 0x100 ) {  /* amplify */
-			l = (l * 125) / 100;
-			r = (r * 125) / 100;
-		}
-
+        // Усиление (как в оригинале)
+        if (voice->flags & 0x100) {
+            l = (l * 125) / 100;
+            r = (r * 125) / 100;
+        }
+		
 		voice->time++;
 
-		voice->tick += 0x10000;
-		voice->tick -= (voice->flags & 0x8000) ? 0x800 : 0;  /* tiny pitch */
-		voice->tick -= (voice->flags & 0x2000) ? 0x8000 : 0;  /* huge pitch */
+        // Обновление позиции в сэмпле
+        int rate = _rates[voice->type >> 4];
+        voice->tick += 0x10000;
+        voice->tick -= (voice->flags & 0x8000) ? 0x800 : 0;
+        voice->tick -= (voice->flags & 0x2000) ? 0x8000 : 0;
 
+        if (voice->tick >= rate) {
+            voice->tick -= rate;
+            voice->count++;
+            voice->size--;
 
-		if( voice->tick >= rate ) {
-			voice->tick -= rate;
+            if (voice->count >= depth) {
+                voice->ptr++;
+                voice->count = 0;
+            }
+        }
 
-			voice->count++;
-			voice->size--;
+        // Проверка на зацикливание
+        if (voice->size == 0 && voice->loop) {
+            uint8 *sfx = cart.rom + punchium_sfx_ptr;
+            voice->ptr = (*(uint16 *)(sfx + voice->num * 8) << 16) | (*(uint16 *)(sfx + voice->num * 8 + 2));
+            voice->size = (*(uint8 *)(sfx + voice->num * 8 + 4) << 16) | (*(uint16 *)(sfx + voice->num * 8 + 6));
+            voice->count = 0;
+        }
+    }
 
-			if( voice->count >= depth ) {
-				voice->ptr++;
-
-				voice->count = 0;
-			}
-		}
- 
-
-next:
-		if( voice->size == 0 ) {
-			voice->count = 0;
-
-			if( voice->loop ) {
-				uint8 *sfx = punchium_sfx_ptr + cart.rom;
-
-				voice->ptr = (*(uint16 *)(sfx + voice->num*8) << 16) | (*(uint16 *)(sfx + voice->num*8 + 2));
-				voice->size = (*(uint8 *)(sfx + voice->num*8 + 4) << 16) | (*(uint16 *)(sfx + voice->num*8 + 6));
-			}
-		}
-	}
-
-	*out_l += l;
-	*out_r += r;
+    *out_l += l;
+    *out_r += r;
 }
 
-
+// Главный аудиомиксер: обрабатывает музыку, SFX, эффекты (эхо), применяет громкость, отправляет данные в blip_buffer.
 void punchium_audio(int cycles)
 {
 	int lcv;
 	int samples = blip_clocks_needed(snd.blips[3], cycles);
 
-
-#if DEBUG_MODE
-	sprintf(error_str, "Audio frame %X - %X\n", samples, cycles);
-	log_cb(RETRO_LOG_ERROR, error_str);
-#endif
-
-
-	if( punchium_s.music_track != punchium_track_last ) {
-		punchium_load_mp3(punchium_s.music_track, 0);
-	}
-
-
+	punchium_load_music_file(punchium_s.music_track, 0);
 	punchium_s.audio_tick++;
-
 
 	for( lcv = 0; lcv < samples; lcv++ ) {
 		int l = 0, r = 0;
 		int ch;
 
-
 		punchium_s.echo_l[punchium_s.echo_ptr] = 0;
 		punchium_s.echo_r[punchium_s.echo_ptr] = 0;
 
-
-		punchium_music_synth(&l, &r);
+		punchium_music_player(&l, &r);
 		punchium_sfx_voice(&l, &r);
-
 
 		punchium_s.echo_ptr = (punchium_s.echo_ptr+1) % (48000/6);
 
 		l += punchium_s.echo_l[punchium_s.echo_ptr];
 		r += punchium_s.echo_r[punchium_s.echo_ptr];
 
-
 		l = (l * punchium_s.sfx_volume) / 0x100;
 		r = (r * punchium_s.sfx_volume) / 0x100;
-
 
 		if( punchium_s.audio_flags & 0x08 ) {  /* gain */
 			l = l * 4 / 2;
 			r = r * 4 / 2;
 		}
 
-
-		if( l > 32767 ) l = 32767;
-		else if( l < -32768 ) l = -32768;
-
-		if( r > 32767 ) r = 32767;
-		else if( r < -32768 ) r = -32768;
-
+		// Клиппинг
+		l = (l > 32767) ? 32767 : (l < -32768) ? -32768 : l;
+		r = (r > 32767) ? 32767 : (r < -32768) ? -32768 : r;
 
 		blip_add_delta_fast(snd.blips[3], lcv, l-punchium_s.out_l, r-punchium_s.out_r);
-
-
 		punchium_s.out_l = l;
 		punchium_s.out_r = r;
 	}
 
-
 	punchium_music_sheet();
-
-
-#if DEBUG_MODE
-	for( lcv = 0; lcv < 8; lcv++ ) {
-		if( !punchium_s.sfx[lcv].decay ) continue;
-
-	sprintf(error_str, "[%d] %d %d %d - %d %d\n", lcv, punchium_s.sfx[lcv].loop, punchium_s.sfx[lcv].volume, punchium_s.sfx[lcv].size, punchium_s.sfx[lcv].decay, punchium_s.sfx[lcv].decay2);
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-		punchium_s.sfx[lcv].decay2 += punchium_s.sfx[lcv].decay;
-		while( punchium_s.sfx[lcv].decay2 >= 2 ) {  /* stage1 intro sound fade-out time ?? 2 seems decent */
-			punchium_s.sfx[lcv].volume -= 1;
-			if( punchium_s.sfx[lcv].volume < 0 ) punchium_s.sfx[lcv].volume = 0;
-
-			punchium_s.sfx[lcv].decay2 -= 2;
-		}
-	}
-#endif
-
-
 	blip_end_frame(snd.blips[3], samples);
-
-
-	punchium_track_last = punchium_s.music_track;
+	punchium_track.track_last = punchium_s.music_track;
 }
 
-
+// Декомпрессия LZ-RLE (используется для тайлов/анимаций).
 static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 {
 	int size = 0;
@@ -782,7 +718,7 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 
 
 #if 0
-	sprintf(error_str, "LZ-RLE %X\n", src);
+	snprintf(error_str, "LZ-RLE %X\n", src);
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -815,7 +751,7 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 	}
 
 #if 0
-	sprintf(error_str, "STOP %X - %X\n", src, size);
+	snprintf(error_str, "STOP %X - %X\n", src, size);
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -823,7 +759,7 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 	punchium_s.decoder_size = size;
 }
 
-
+// Декомпрессия LZO (более сложный алгоритм).
 static void punchium_decoder_lzo(uint src, uint8 *dst)
 {
 	int size = 0;
@@ -832,7 +768,7 @@ static void punchium_decoder_lzo(uint src, uint8 *dst)
 
 
 #if 0
-	sprintf(error_str, "LZO %X\n", src);
+	snprintf(error_str, "LZO %X\n", src);
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -1001,7 +937,7 @@ copy_loop:
 
 
 #if 0
-	sprintf(error_str, "END %X - %X\n", src, size);
+	snprintf(error_str, "END %X - %X\n", src, size);
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -1009,7 +945,7 @@ copy_loop:
 	punchium_s.decoder_size = size;
 }
 
-
+// Выбор декомпрессора на основе заголовка данных.
 static void punchium_decoder_type(int src, uint8 *dst)
 {
 	int type = cart.rom[(src++)^1];
@@ -1022,18 +958,18 @@ static void punchium_decoder_type(int src, uint8 *dst)
 
 	else {
 #if DEBUG_MODE
-		sprintf(error_str, "%X - Decoder_Type %X\n", src-1, type);
+		snprintf(error_str, "%X - Decoder_Type %X\n", src-1, type);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "punchium_decoder_init", 0);
+		//MessageBoxA(0, error_str, "punchium_decoder_init", 0);
 #endif
 	}
 }
 
-
-static int punchium_decoder(int mode)
+// Обертка для декомпрессии с управлением через регистры.
+static void punchium_decoder(int mode)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Decoder %02X -- %04X %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Decoder %02X -- %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		mode, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14));
@@ -1044,73 +980,64 @@ static int punchium_decoder(int mode)
 	int offset = *(uint16 *)(punchium_s.ram + 0x1E10);
 	int ptr = (*(uint16 *)(punchium_s.ram + 0x1E12) << 16) + *(uint16 *)(punchium_s.ram + 0x1E14);
 
-
 #if DEBUG_MODE
 	if( mode != 2 && mode != 7 ) {
-		sprintf(error_str, "Mode %X", mode);
+		snprintf(error_str, "Mode %X", mode);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "Decoder_Init", 0);
+		//MessageBoxA(0, error_str, "Decoder_Init", 0);
 	}
 #endif
 
-
 	punchium_decoder_type(ptr, punchium_s.decoder_ram + offset);
-
-
 	punchium_s.decoder_mode = mode;
 	punchium_s.decoder_ptr = offset;
 
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 3 ) {
-		sprintf(error_str, "Decoder %d count\n", punchium_cmd_count);
+		snprintf(error_str, "Decoder %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
 
-static int punchium_decoder_copy(int arg)
+static void punchium_decoder_copy(int arg)
 {
 	/* *(uint16 *)(punchium_s.ram + 0x1E10); */
 	int offset = *(uint16 *)(punchium_s.ram + 0x1E12);
 	int size = *(uint16 *)(punchium_s.ram + 0x1E14);
 
-
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Decoder_Copy %02X [%X] -- %04X %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Decoder_Copy %02X [%X] -- %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, punchium_s.decoder_ptr,
 		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14));
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
-
-
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) ) {
-		sprintf(error_str, "punchium_decoder 1E10 = %X", *(uint16 *)(punchium_s.ram + 0x1E10));
+		snprintf(error_str, "punchium_decoder 1E10 = %X", *(uint16 *)(punchium_s.ram + 0x1E10));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0,error_str,"decoder",0);
+		//MessageBoxA(0,error_str,"decoder",0);
 	}
 #endif
-
 
 	punchium_s.decoder_ptr = offset;
 	punchium_s.decoder_size = size;
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 3 ) {
-		sprintf(error_str, "Decoder_Copy %d count\n", punchium_cmd_count);
+		snprintf(error_str, "Decoder_Copy %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Отрисовка спрайтов: декодирует тайлы, формирует DMA-команды для VDP, управляет анимациями.
 static void punchium_sprite(int index)
 {
 	int lcv, spr_x, spr_y, count;
@@ -1180,7 +1107,7 @@ static void punchium_sprite(int index)
 #if DEBUG_SPRITE
 	uint8 *ptr = punchium_s.ram + 0xF80 + index*16;
 
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sprite %02X - %04X %04X %04X %04X %04X %04X X=%04X Y=%04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite %02X - %04X %04X %04X %04X %04X %04X X=%04X Y=%04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		index,
@@ -1209,7 +1136,7 @@ reload:
 
 
 #if DEBUG_SPRITE
-	sprintf(error_str, "%X - %X %X %X - %X - %X %X\n",
+	snprintf(error_str, "%X - %X %X %X - %X - %X %X\n",
 		((obj+1) & 0x7FFF)*4,
 		animPtr, anim, animPtr + anim*4,
 		framePtr,
@@ -1249,7 +1176,7 @@ reload:
 
 
 #if 0
-	sprintf(error_str, "%d - %X %X %X\n", count, src, vram, flags2);
+	snprintf(error_str, "%d - %X %X %X\n", count, src, vram, flags2);
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -1299,7 +1226,7 @@ reload:
 					*(uint16*) (punchium_s.ram + 0xB06 + spriteCount*8) = (spr_x - ((!flip_h) ? 0 : size_x*8)) & 0x1FF;
 
 #if DEBUG_SPRITE
-					sprintf(error_str, "%d / %X %X %X %X\n",
+					snprintf(error_str, "%d / %X %X %X %X\n",
 						spriteCount,
 						*(uint16*) (punchium_s.ram + 0xB00 + (spriteCount-0)*8),
 						*(uint16*) (punchium_s.ram + 0xB02 + (spriteCount-0)*8),
@@ -1325,7 +1252,7 @@ reload:
 					*(uint16*) (punchium_s.exps_ram + 6 + (spriteCount-80)*8) = (spr_x - ((!flip_h) ? 0 : size_x*8)) & 0x1FF;
 
 #if DEBUG_SPRITE
-					sprintf(error_str, "%d / %X %X %X %X\n",
+					snprintf(error_str, "%d / %X %X %X %X\n",
 						spriteCount,
 						*(uint16*) (punchium_s.ram + 0x1F20 + (spriteCount-80)*8),
 						*(uint16*) (punchium_s.ram + 0x1F22 + (spriteCount-80)*8),
@@ -1339,7 +1266,7 @@ reload:
 				spriteCount++;
 
 #if DEBUG_SPRITE
-				sprintf(error_str, "%d %d / %d %d %X %X / %X %X %X\n", spriteCount, count, spr_x, spr_y, tileAttr, objAttr, src, vram, tile);
+				snprintf(error_str, "%d %d / %d %d %X %X / %X %X %X\n", spriteCount, count, spr_x, spr_y, tileAttr, objAttr, src, vram, tile);
 				log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 			}
@@ -1349,11 +1276,9 @@ reload:
 
 		int ptr = punchium_tile_ptr + (*(uint16*)(cart.rom + tilePtr) << 16) + *(uint16*)(cart.rom + tilePtr + 2);
 		static uint8 tile_ram[0x10000];
-
+		
 		punchium_decoder_type(ptr, tile_ram);
 		memcpy(punchium_s.ram + src, tile_ram + ofs * 0x20, tileSize);
-
-
 		//if( !tiledupe && dmaPtr < dmalimit && vram < vramlimit && tile < tilelimit)
 
 		*(uint16*) (punchium_s.ram + 0x1400 + dmaPtr*16) = 0x8F02;
@@ -1379,11 +1304,11 @@ reload:
 	punchium_s.draw_dst = vram;
 }
 
-
+// Сброс состояния спрайтов.
 static void punchium_sprite_init(int arg)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Init %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Init %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
@@ -1392,21 +1317,20 @@ static void punchium_sprite_init(int arg)
 
 	memset(punchium_s.ram + 0x1F20, 0, 14*8);
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Sprite_Init %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sprite_Init %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Подготовка к отрисовке (инициализация DMA-буфера).
 static void punchium_sprite_start(int arg)
 {
 #if DEBUG_SPRITE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Start %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Start %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
@@ -1439,18 +1363,18 @@ static void punchium_sprite_start(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Sprite_Start %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sprite_Start %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Остановка отрисовки (очистка списка спрайтов).
 static void punchium_sprite_stop(int arg)
 {
 #if DEBUG_SPRITE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Stop %02X -- %d sprites\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Stop %02X -- %d sprites\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16*)(punchium_s.ram + 0x1f18));
@@ -1480,9 +1404,9 @@ static void punchium_sprite_stop(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Sprite_Stop %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sprite_Stop %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
@@ -1491,7 +1415,7 @@ static void punchium_sprite_stop(int arg)
 static void punchium_sprite_pause(int arg)
 {
 #if DEBUG_SPRITE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Pause %02X -- %d sprites\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Pause %02X -- %d sprites\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16*)(punchium_s.ram + 0x1f18));
@@ -1503,31 +1427,29 @@ static void punchium_sprite_pause(int arg)
 	if( count == 0 )
 		memset(punchium_s.ram + 0xB00, 0, 8);
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Sprite_Pause %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sprite_Pause %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Инициализация масштабирования графики (используется для эффектов).
 static void punchium_scaler_init(int arg)
 {
 	int row, col, out;
 	static uint8 temp[0x800];
 
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Scaler_Init %02X - %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Scaler_Init %02X - %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg,
 		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
-
 
 	int ptr = (*(uint16 *)(punchium_s.ram + 0x1E10) << 16) + *(uint16 *)(punchium_s.ram + 0x1E12);
 	punchium_decoder_type(ptr, temp);
@@ -1546,17 +1468,16 @@ static void punchium_scaler_init(int arg)
 		}
 	}
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		sprintf(error_str, ">>  Scaler_Init %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Scaler_Init %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Применение масштабирования к графике (построчная обработка).
 static void punchium_scaler(int arg)
 {
 	int row, col;
@@ -1568,15 +1489,13 @@ static void punchium_scaler(int arg)
 	int step = 64 * 0x10000 / scale;
 	int ptr_frac = 0;
 
-
 #if DEBUG_SPRITE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Scaler %02X --  %04X %04X %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Scaler %02X --  %04X %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
-
 
 	for( col = 0; col < 128; col++ ) {
 		int base = (col & 4) ? 0x600 : 0x200;
@@ -1585,12 +1504,12 @@ static void punchium_scaler(int arg)
 		for( row = 0; row < 64; row += 2 ) {
 			if( (col >= left) && (col < right) ) {
 				if(col & 1)
-					punchium_s.ram[base + out^1] += punchium_s.scaler_ram[row*64 + ptr] & 0x0F;
+					punchium_s.ram[base + (out^1)] += punchium_s.scaler_ram[row*64 + ptr] & 0x0F;
 				else
-					punchium_s.ram[base + out^1] = punchium_s.scaler_ram[row*64 + ptr] << 4;
+					punchium_s.ram[base + (out^1)] = punchium_s.scaler_ram[row*64 + ptr] << 4;
 			}
 			else if( (col & 1) == 0 )
-				punchium_s.ram[base + out^1] = 0;
+				punchium_s.ram[base + (out^1)] = 0;
 
 			out += 2;
 		}
@@ -1605,21 +1524,20 @@ static void punchium_scaler(int arg)
 		}
 	}
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 4 ) {
-		sprintf(error_str, ">>  Scaler %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Scaler %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Чтение из SRAM (сохранения) в RAM.
 static void punchium_sram_read(int bank)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sram_Read %02X -- %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sram_Read %02X -- %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		bank, *(uint16 *)(punchium_s.ram + 0x1E10));
@@ -1631,27 +1549,25 @@ static void punchium_sram_read(int bank)
 	if( (bank >= 1) && (bank <= 4) )
 		memcpy(punchium_s.ram + offset, sram.sram + ((bank-1) * 0x780), 0x780);
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 1 ) {
-		sprintf(error_str, ">>  Sram_Read %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sram_Read %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Запись из RAM в SRAM.
 static void punchium_sram_write(int bank)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sram_Write %02X -- %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sram_Write %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		bank, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
-
 
 	/* *(uint16 *)(punchium_s.ram + 0x1E10) */
 	int offset = *(uint16 *)(punchium_s.ram + 0x1E12);
@@ -1659,51 +1575,48 @@ static void punchium_sram_write(int bank)
 	if( (bank >= 1) && (bank <= 4) )
 		memcpy(sram.sram + ((bank-1) * 0x780), punchium_s.ram + offset, 0x780);
 
-
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0xBEEF ) {
-		sprintf(error_str, ">>  SRAM write 1E10 %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		snprintf(error_str, ">>  SRAM write 1E10 %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "sram write", 0);
+		//MessageBoxA(0, error_str, "sram write", 0);
 	}
 
 	if( punchium_cmd_count != 1 ) {
-		sprintf(error_str, ">>  Sram_Write %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sram_Write %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Управление маппингом ROM (переключение банков памяти).
 static void punchium_mapper(int arg)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Mapper %02X -- %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Mapper %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
 	log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
-
 	memcpy(punchium_s.ram + 0x8000, cart.rom + 0x8000, 0x8000);  /* troll */
-
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		sprintf(error_str, ">>  Mapper %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Mapper %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+ // Первичная загрузка: инициализирует указатели на ресурсы (музыка, SFX, тайлы).
 static void punchium_boot(int arg)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Boot %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Boot %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
@@ -1720,9 +1633,7 @@ static void punchium_boot(int arg)
 
 	/* punchium_wave_unpack(punchium_wave_ptr, punchium_wave_ram); */
 	punchium_decoder_type(punchium_sprite_ptr, punchium_obj_ram);
-
 	punchium_s.decoder_size = 0;
-
 
 #if DEBUG_MODE
 	punchium_cmd_count = 0;
@@ -1733,7 +1644,7 @@ static void punchium_boot(int arg)
 static void punchium_EC(int arg)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM EC %02X = %02X %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM EC %02X = %02X %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
@@ -1742,26 +1653,26 @@ static void punchium_EC(int arg)
 
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) ) {
-		sprintf(error_str, ">>  EC %02X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		snprintf(error_str, ">>  EC %02X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ec", 0);
+		//MessageBoxA(0, error_str, "ec", 0);
 	}
 #endif
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		sprintf(error_str, ">>  EC %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  EC %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Запускает музыкальный трек: загружает данные нотного листа, сбрасывает состояние каналов.
 static void punchium_music(int track)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Music %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Music %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		track);
@@ -1775,11 +1686,9 @@ static void punchium_music(int track)
 	punchium_decoder_type(punchium_music_ptr + ptr, punchium_s.music_ram);
 	punchium_s.decoder_size = 0;
 
-
 	punchium_s.music_section = 0;
 	punchium_s.music_segment = 0;
 	punchium_s.audio_tick = 0;
-
 
 	memset(punchium_s.music, 0, sizeof(punchium_s.music));
 	for( int ch = 0; ch < 26; ch++ ) {
@@ -1790,26 +1699,22 @@ static void punchium_music(int track)
 		voice->program = punchium_s.music_ram[0x2A + ch^1];
 	}
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Music %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Music %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 
-
-#if 1
-	punchium_load_mp3(track, 1);
-#endif
+	punchium_load_music_file(track, 1);
 }
 
-
+// Устанавливает громкость музыки.
 static void punchium_music_volume(int level)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Music_Volume %02X -- %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Volume %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		level, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
@@ -1820,29 +1725,27 @@ static void punchium_music_volume(int level)
 	/* *(uint16 *)(punchium_s.ram + 0x1E10); */
 	/* *(uint16 *)(punchium_s.ram + 0x1E12); */
 
-
 #if 0
 	// stream mp3 / ogg, manage tempo
 #endif
 
-
 #if DEBUG_MODE
 	if(*(uint16 *)(punchium_s.ram + 0x1E10) != 0x80) {
-		sprintf(error_str, ">>  Music_Volume = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		snprintf(error_str, ">>  Music_Volume = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 
 	if(*(uint16 *)(punchium_s.ram + 0x1E12) != 0x00 && *(uint16 *)(punchium_s.ram + 0x1E12) != 0x08) {
-		sprintf(error_str, ">>  Music_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
+		snprintf(error_str, ">>  Music_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 
 	if( punchium_cmd_count != 2 ) {
-		sprintf(error_str, ">>  Music_Volume %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Music_Volume %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
@@ -1851,7 +1754,7 @@ static void punchium_music_volume(int level)
 static void punchium_music_setting(int flag)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Music_Setting %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Setting %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flag);
@@ -1864,21 +1767,19 @@ static void punchium_music_setting(int flag)
 	else if( flag == 0 )
 		punchium_s.music_segment = -1;
 
-
 #if DEBUG_MODE
 	else {
-		sprintf(error_str, ">>  Music_Setting = %X\n", flag);
+		snprintf(error_str, ">>  Music_Setting = %X\n", flag);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 #endif
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Music_Setting %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Music_Setting %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
@@ -1887,7 +1788,7 @@ static void punchium_music_setting(int flag)
 static void punchium_music_special(int flag)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Music_Special %02X = %04X %04X %04X %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Special %02X = %04X %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flag, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
@@ -1900,21 +1801,21 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x40 ) {
-			sprintf(error_str, ">>  Music_Special_01 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_01 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( *(uint16 *)(punchium_s.ram + 0x1E12) != 0x08 ) {
-			sprintf(error_str, ">>  Music_Special_01-2 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_01-2 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( punchium_cmd_count != 2 ) {
-			sprintf(error_str, ">>  Music_Special-01 %d count\n", punchium_cmd_count);
+			snprintf(error_str, ">>  Music_Special-01 %d count\n", punchium_cmd_count);
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 #endif
 	}
@@ -1924,15 +1825,15 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 4 && *(uint16 *)(punchium_s.ram + 0x1E10) != 0 ) {
-			sprintf(error_str, ">>  Music_Special_02 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_02 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			sprintf(error_str, ">>  Music_Special-02 %d count\n", punchium_cmd_count);
+			snprintf(error_str, ">>  Music_Special-02 %d count\n", punchium_cmd_count);
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 #endif
 	}
@@ -1942,15 +1843,15 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x80 && *(uint16 *)(punchium_s.ram + 0x1E10) != 0x81 ) {
-			sprintf(error_str, ">>  Music_Special_04 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_04 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			sprintf(error_str, ">>  Music_Special-04 %d count\n", punchium_cmd_count);
+			snprintf(error_str, ">>  Music_Special-04 %d count\n", punchium_cmd_count);
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 #endif
 	}
@@ -1962,15 +1863,15 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 1 ) {
-			sprintf(error_str, ">>  Music_Special_06 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_06 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( punchium_cmd_count != 3 ) {
-			sprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
+			snprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 #endif
 	}
@@ -1980,33 +1881,33 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x6C && *(uint16 *)(punchium_s.ram + 0x1E10) != 0xA0 ) {
-			sprintf(error_str, ">>  Music_Special_07 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			snprintf(error_str, ">>  Music_Special_07 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			sprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
+			snprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
 			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "count", 0);
+			//MessageBoxA(0, error_str, "count", 0);
 		}
 #endif
 	}
 
 #if DEBUG_MODE
 	else {
-		sprintf(error_str, ">>  Music special = %X\n", flag);
+		snprintf(error_str, ">>  Music special = %X\n", flag);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 #endif
 }
 
-
+// Настройки аудио (DAC, NTSC/PAL, усиление).
 static void punchium_audio_setting(int flags)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Audio_Settings %02X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Audio_Settings %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flags);
@@ -2014,27 +1915,24 @@ static void punchium_audio_setting(int flags)
 #endif
 
 	punchium_s.audio_flags = flags;
-
 	punchium_s.ram[0x1801] = flags & 0x01;  /* dac */
-
 	punchium_s.ram[0x1800]  = (flags & 0x01) ? 0x80 : 0x00;  /* dac */
 	punchium_s.ram[0x1800] += (flags & 0x02) ? 0x40 : 0x00;  /* ntsc */
 
-
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, ">>  Audio_Settings %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Audio_Settings %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
-
+// Устанавливает громкость SFX.
 static void punchium_sfx_volume(int level)
 {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM Sfx_Volume %02X -- %04X\n",
+	snprintf(error_str, "[%d] [%04X:%04X] DM Sfx_Volume %02X -- %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		level, *(uint16 *)(punchium_s.ram + 0x1E10));
@@ -2048,414 +1946,331 @@ static void punchium_sfx_volume(int level)
 
 #if DEBUG_MODE
 	if(*(uint16 *)(punchium_s.ram + 0x1E10) != 0x80) {
-		sprintf(error_str, ">>  Sfx_Volume-1 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		snprintf(error_str, ">>  Sfx_Volume-1 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 
 	if(*(uint16 *)(punchium_s.ram + 0x1E12) != 0x00 && punchium_cmd_count == 2) {
-		sprintf(error_str, ">>  Sfx_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
+		snprintf(error_str, ">>  Sfx_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "ooo", 0);
+		//MessageBoxA(0, error_str, "ooo", 0);
 	}
 #endif
 
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 1 && punchium_cmd_count != 2 ) {
-		sprintf(error_str, ">>  Sfx_Volume %d count\n", punchium_cmd_count);
+		snprintf(error_str, ">>  Sfx_Volume %d count\n", punchium_cmd_count);
 		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
+		//MessageBoxA(0, error_str, "count", 0);
 	}
 #endif
 }
 
+// Обработка отладочной печати
+void punchium_cmd_print_debug(int cmd, int data, int argscnt, int v_counter, int punchium_cmd_count)
+{
+#if DEBUG_MODE
+	switch (argscnt) {
+		case 0:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data);
+			break;
+		case 1:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data,
+				*(uint16_t *)(punchium_s.ram + 0x1E10));
+			break;
+		case 2:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data,
+				*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12));
+			break;
+		case 4:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data,
+				*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+				*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
+			break;
+		case 5:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data,
+				*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+				*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16), 
+				*(uint16_t *)(punchium_s.ram + 0x1E18));
+			break;
+		case 9:
+			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X ..\n",
+				v_counter,
+				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+				cmd, data,
+				*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+				*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16), 
+				*(uint16_t *)(punchium_s.ram + 0x1E18));
+			break;
+		default:
+			if (argscnt == 4) {
+				snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
+					v_counter,
+					(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+					cmd, data,
+					*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+					*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
+			} else {
+				snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X ## %04X %04X %04X %04X\n",
+					v_counter,
+					(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
+					cmd, data,
+					*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+					*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
+			}
+			snprintf(error_str, "DM %02X %02X\n", cmd, data);
+			break;
+	}
+	
+	log_cb(RETRO_LOG_ERROR, error_str);
+	
+	if (argscnt >= 0 && argscnt <= 9 && punchium_cmd_count != argscnt) {
+		snprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
+		log_cb(RETRO_LOG_ERROR, error_str);
+	}
+#endif
+}
 
-static void punchium_cmd(int data)
+// Обработка воспроизведения звукового эффекта
+void punchium_sfx_play(int data, int v_counter, int retaddr)
+{
+	int chan, vol, pan, flags;
+	int ptr, size, type;
+	int lcv;
+	int newch = 0, maxtime = 0;
+	const int rates[] = {1,2,4,5,8,9};
+	uint8_t *sfx = punchium_sfx_ptr + cart.rom;
+
+#if DEBUG_MODE
+	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Play %02X -- %04X %04X %04X %04X\n",
+		v_counter,
+		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
+		data, *(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+		*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
+	log_cb(RETRO_LOG_ERROR, error_str);
+#endif
+
+	chan = *(uint16_t *)(punchium_s.ram + 0x1E10);
+	vol = *(uint16_t *)(punchium_s.ram + 0x1E12);
+	pan = *(uint16_t *)(punchium_s.ram + 0x1E14);
+	flags = *(uint16_t *)(punchium_s.ram + 0x1E16);
+
+#if DEBUG_MODE
+	if (flags & 0x100) {
+		snprintf(error_str, "Sfx flags %X\n", flags);
+		log_cb(RETRO_LOG_ERROR, error_str);
+	} else if (!(flags & 0x8000) && !(flags & 0x4000) && !(flags & 0x2000) && 
+			   !(flags & 0x800) && !(flags & 0x400) && flags != 0) {
+		snprintf(error_str, "Sfx flags %X\n", flags);
+		log_cb(RETRO_LOG_ERROR, error_str);
+	}
+
+	if (chan > 0x80) {
+		// Сообщение о предупреждении для канала SFX
+	}
+#endif
+
+	ptr = (*(uint16_t *)(sfx + data*8) << 16) | (*(uint16_t *)(sfx + data*8 + 2));
+	size = (*(uint8_t *)(sfx + data*8 + 4) << 16) | (*(uint16_t *)(sfx + data*8 + 6));
+	type = *(uint8_t *)(sfx + data*8 + 5);
+
+#if DEBUG_MODE
+	snprintf(error_str, "%X %X | %X %X %X | %X %X %X\n",
+		punchium_sfx_ptr + data*8, punchium_sfx_ptr + ptr,
+		ptr, size, type,
+		rates[type >> 4], type & 0x03, type & 0x0C);
+	log_cb(RETRO_LOG_ERROR, error_str);
+#endif
+
+	// Поиск свободного канала
+	for (lcv = 0; lcv < 8; lcv++, chan >>= 1) {
+		if ((chan & 1) == 0) continue;
+
+		if (punchium_s.sfx[lcv].size) {
+			if (maxtime < punchium_s.sfx[lcv].time) {
+				maxtime = punchium_s.sfx[lcv].time;
+				newch = lcv;
+			}
+			continue;
+		}
+
+		newch = lcv;
+		break;
+	}
+
+	// Настройка параметров звукового эффекта
+	punchium_s.sfx[newch].volume = vol;
+	punchium_s.sfx[newch].panning = pan;
+	punchium_s.sfx[newch].type = type;
+	punchium_s.sfx[newch].num = data;
+	punchium_s.sfx[newch].flags = flags;
+	punchium_s.sfx[newch].loop = 0;
+	punchium_s.sfx[newch].count = 0;
+	punchium_s.sfx[newch].time = 0;
+	punchium_s.sfx[newch].tick = 0;
+	punchium_s.sfx[newch].decay = 0;
+
+	if (flags & 0x4000) {
+		punchium_s.sfx[newch].echo = (punchium_s.echo_pan++) & 1;
+	}
+
+	punchium_s.sfx[newch].ptr = ptr;
+	punchium_s.sfx[newch].start = ptr;
+	punchium_s.sfx[newch].size = size;
+}
+
+// Обработка зацикливания звукового эффекта
+void punchium_sfx_loop(int data, int v_counter, int retaddr)
+{
+#if DEBUG_MODE
+	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Loop %02X -- %04X %04X %04X\n",
+		v_counter,
+		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
+		data, *(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
+		*(uint16_t *)(punchium_s.ram + 0x1E14));
+	log_cb(RETRO_LOG_ERROR, error_str);
+#endif
+
+	for (int lcv = 0; lcv < 8; lcv++, data >>= 1) {
+		if ((data & 1) == 0) continue;
+
+		punchium_s.sfx[lcv].volume = *(uint16_t *)(punchium_s.ram + 0x1E10);
+		punchium_s.sfx[lcv].panning = *(uint16_t *)(punchium_s.ram + 0x1E12);
+		punchium_s.sfx[lcv].decay = *(uint16_t *)(punchium_s.ram + 0x1E14);
+		punchium_s.sfx[lcv].loop = 1;
+		break;
+	}
+}
+
+// Обработка остановки звукового эффекта
+static void punchium_sfx_off(int data, int v_counter, int retaddr, int lcv)
+{
+	int flags;
+
+#if DEBUG_MODE
+	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Off %02X -- %04X\n",
+		v_counter,
+		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
+		data, *(uint16_t *)(punchium_s.ram + 0x1E10));
+	log_cb(RETRO_LOG_ERROR, error_str);
+#endif
+
+	flags = *(uint16_t *)(punchium_s.ram + 0x1E10);
+
+	if (flags != 0) {
+		// Сообщение о предупреждении для флагов SFX_Off
+	}
+
+	for (lcv = 0; lcv < 8; lcv++) {
+		if (!(data & (1 << lcv))) continue;
+
+		if (flags == 0) {
+			punchium_s.sfx[lcv].size = 0;
+		}
+
+		punchium_s.sfx[lcv].decay = flags;
+		punchium_s.sfx[lcv].loop = 0;
+		break;
+	}
+}
+
+// Обработчик команд от игры (0x1FEA): вызывает нужную функцию по `cmd`.
+void punchium_cmd(int data)
 {
 	int cmd = data >> 8;
 	int lcv;
 	int retaddr;
 	int argscnt;
 
-
 	data &= 0xFF;
 
-	if( m68k.prev_pc == 0xb4394 ) {
-		retaddr = m68k_read_immediate_32(m68k.dar[15]+16);
+	if (m68k.prev_pc == 0xb4394) {
+		retaddr = m68k_read_immediate_32(m68k.dar[15] + 16);
 		argscnt = 4;
-	}
-	else {
-		retaddr = m68k_read_immediate_32(m68k.dar[15]+4);
+	} else {
+		retaddr = m68k_read_immediate_32(m68k.dar[15] + 4);
 		argscnt = 0;
 	}
 
-
-
-	switch(cmd) {
-	case 0x81:
-	case 0x83:
-	case 0x95:
-	case 0x96:
-	case 0xA4:
-	case 0xA9:
-	case 0xB6:
-		goto print_0;
-
-	case 0xD0:
-		goto print_2;
-		goto print_5;
-
-	case 0xE7:  /* T-574120-0 = after demo loop */
-		goto print_9;
-
-	case 0xD5:  /* secret room */
-	case 0xEC:
-		goto print_2;
-
-	case 0x84: punchium_mapper(data); break;
-	case 0x88: punchium_audio_setting(data); break;
-	case 0x8C: punchium_music(data); break;
-	case 0x8D: punchium_music_setting(data); break;
-	case 0xAD: punchium_sprite(data); break;
-	case 0xAE: punchium_sprite_start(data); break;
-	case 0xAF: punchium_sprite_stop(data); break;
-	case 0xB0: punchium_sprite_init(data); break;
-	case 0xB1: punchium_sprite_pause(data); break;
-	case 0xC6: punchium_boot(data); break;
-	case 0xC9: punchium_music_volume(data); break;
-	case 0xCA: punchium_sfx_volume(data); break;
-	case 0xD1: goto sfx_play;
-	case 0xD2: goto sfx_off;
-	case 0xD3: goto sfx_loop;
-	case 0xD6: punchium_music_special(data); break;
-	case 0xDA: punchium_decoder(data); break;
-	case 0xDB: punchium_decoder_copy(data); break;
-	case 0xDF: punchium_sram_read(data); break;
-	case 0xE0: punchium_sram_write(data); break;
-	//case 0xF2: punchium_block_viewer(data); break;
-	case 0xF4: punchium_scaler_init(data); break;
-	case 0xF5: punchium_scaler(data); break;
-
-	default: goto print_x;
-	}
-
-
-done:
-	*(uint16*)(punchium_s.ram + 0x1FEA) &= 0x7FFF;
-	return;
-
-
-
-print_0:
+	switch (cmd) {
 #if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data);
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-	if( punchium_cmd_count != 0 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_1:
-#if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data,
-		*(uint16 *)(punchium_s.ram + 0x1E10));
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-	if( punchium_cmd_count != 1 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_2:
-#if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data,
-		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-	if( punchium_cmd_count != 2 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_4:
-#if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data,
-		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-
-	if( punchium_cmd_count != 4 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_5:
-#if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data,
-		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16), *(uint16 *)(punchium_s.ram + 0x1E18));
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-	if( punchium_cmd_count != 5 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_9:
-#if DEBUG_MODE
-	sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X ..\n",
-		v_counter,
-		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-		cmd, data,
-		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16), *(uint16 *)(punchium_s.ram + 0x1E18));
-	log_cb(RETRO_LOG_ERROR, error_str);
-
-	if( punchium_cmd_count != 9 ) {
-		sprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		MessageBoxA(0, error_str, "count", 0);
-	}
-#endif
-	goto done;
-
-
-print_x:
-#if DEBUG_MODE
-	if( argscnt == 4 ) {
-		sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
-			v_counter,
-			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-			cmd, data,
-			*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-		log_cb(RETRO_LOG_ERROR, error_str);
-	}
-
-	else {
-		sprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X ## %04X %04X %04X %04X\n",
-			v_counter,
-			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
-			cmd, data,
-			*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-		log_cb(RETRO_LOG_ERROR, error_str);
-	}
-
-	sprintf(error_str, "DM %02X %02X\n", cmd, data);
-	log_cb(RETRO_LOG_ERROR, error_str);
-	MessageBoxA(0, error_str, "DM", 0);
-#endif
-	goto done;
-
-
-sfx_play:
-	{
-		int chan, vol, pan, flags;
-		int ptr, size, type;
-		int lcv;
-		int newch = 0, maxtime = 0;
-		const int rates[] = {1,2,4,5,8,9};
-		uint8 *sfx = punchium_sfx_ptr + cart.rom;
-
-
-#if DEBUG_MODE
-		sprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Play %02X -- %04X %04X %04X %04X\n",
-			v_counter,
-			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
-			data, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-		log_cb(RETRO_LOG_ERROR, error_str);
-#endif
-
-		chan = *(uint16 *)(punchium_s.ram + 0x1E10);
-		vol = *(uint16 *)(punchium_s.ram + 0x1E12);
-		pan = *(uint16 *)(punchium_s.ram + 0x1E14);
-		flags = *(uint16 *)(punchium_s.ram + 0x1E16);
-
-
-#if DEBUG_MODE
-		if(flags & 0x100) {
-			sprintf(error_str, "Sfx flags %X\n", flags);
-			//MessageBoxA(0, error_str, "Sfx flags", MB_OK );			
-			log_cb(RETRO_LOG_ERROR, error_str);
-		}  /* stage1 alarm = 8100 */
-		//else if( flags <= 0x8100 ) {}
-		else if( flags & 0x8000 ) {}
-		else if( flags & 0x4000 ) {}
-		else if( flags & 0x2000 ) {}
-		else if( flags & 0x800 ) {}
-		//else if( flags & 0x100 ) {}
-		else if( flags & 0x400 ) {}
-		else if( flags == 0 ) {}
-		else {
-			sprintf(error_str, "Sfx flags %X\n", flags);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			MessageBoxA(0, error_str, "Sfx flags", MB_OK );
-		}
-
-
-		if( chan > 0x80 ) MessageBoxA(0, "Sfx channel", "Warn", MB_OK );
-#endif
-
-
-		ptr = (*(uint16 *)(sfx + data*8) << 16) | (*(uint16 *)(sfx + data*8 + 2));
-		size = (*(uint8 *)(sfx + data*8 + 4) << 16) | (*(uint16 *)(sfx + data*8 + 6));
-		type = *(uint8 *)(sfx + data*8 + 5);
-
-
-#if DEBUG_MODE
-		sprintf(error_str, "%X %X | %X %X %X | %X %X %X\n",
-			punchium_sfx_ptr + data*8, punchium_sfx_ptr + ptr,
-			ptr, size, type,
-			rates[type >> 4], type & 0x03, type & 0x0C);
-		log_cb(RETRO_LOG_ERROR, error_str);
-#endif
-
-
-		for( lcv = 0; lcv < 8; lcv++, chan >>= 1 ) {
-			if( (chan & 1) == 0 ) continue;
-
-			if( punchium_s.sfx[lcv].size ) {
-				if( maxtime < punchium_s.sfx[lcv].time ) {
-					maxtime = punchium_s.sfx[lcv].time;
-					newch = lcv;
-				}
-				continue;
-			}
-
-			newch = lcv;
+		case 0x81:
+		case 0x83:
+		case 0x95:
+		case 0x96:
+		case 0xA4:
+		case 0xA9:
+		case 0xB6:
+			punchium_cmd_print_debug(cmd, data, 0, v_counter, punchium_cmd_count);
 			break;
-		}
 
+		case 0xD0:
+			punchium_cmd_print_debug(cmd, data, 2, v_counter, punchium_cmd_count);
+			punchium_cmd_print_debug(cmd, data, 5, v_counter, punchium_cmd_count);
+			break;
 
-		punchium_s.sfx[newch].volume = vol;
-		punchium_s.sfx[newch].panning = pan;
-		punchium_s.sfx[newch].type = type;
+		case 0xE7:  /* T-574120-0 = after demo loop */
+			punchium_cmd_print_debug(cmd, data, 9, v_counter, punchium_cmd_count);
+			break;
 
-		punchium_s.sfx[newch].num = data;
-		punchium_s.sfx[newch].flags = flags;
-
-		punchium_s.sfx[newch].loop = 0;
-		punchium_s.sfx[newch].count = 0;
-		punchium_s.sfx[newch].time = 0;
-		punchium_s.sfx[newch].tick = 0;
-		punchium_s.sfx[newch].decay = 0;
-
-		if( flags & 0x4000 )
-			punchium_s.sfx[newch].echo = (punchium_s.echo_pan++) & 1;
-
-		punchium_s.sfx[newch].ptr = ptr;
-		punchium_s.sfx[newch].start = ptr;
-		punchium_s.sfx[newch].size = size;
-	}
-	goto done;
-
-
-sfx_loop:
-	{
-		int lcv;
-
+		case 0xD5:  /* secret room */
+		case 0xEC:
+			punchium_cmd_print_debug(cmd, data, 2, v_counter, punchium_cmd_count);
+			break;
+#endif
+		case 0x84: punchium_mapper(data); break;
+		case 0x88: punchium_audio_setting(data); break;
+		case 0x8C: punchium_music(data); break;
+		case 0x8D: punchium_music_setting(data); break;
+		case 0xAD: punchium_sprite(data); break;
+		case 0xAE: punchium_sprite_start(data); break;
+		case 0xAF: punchium_sprite_stop(data); break;
+		case 0xB0: punchium_sprite_init(data); break;
+		case 0xB1: punchium_sprite_pause(data); break;
+		case 0xC6: punchium_boot(data); break;
+		case 0xC9: punchium_music_volume(data); break;
+		case 0xCA: punchium_sfx_volume(data); break;
+		case 0xD1: punchium_sfx_play(data, v_counter, retaddr); break;
+		case 0xD2: punchium_sfx_off(data, v_counter, retaddr, lcv); break;
+		case 0xD3: punchium_sfx_loop(data, v_counter, retaddr); break;
+		case 0xD6: punchium_music_special(data); break;
+		case 0xDA: punchium_decoder(data); break;
+		case 0xDB: punchium_decoder_copy(data); break;
+		case 0xDF: punchium_sram_read(data); break;
+		case 0xE0: punchium_sram_write(data); break;
+		case 0xF4: punchium_scaler_init(data); break;
+		case 0xF5: punchium_scaler(data); break;
 
 #if DEBUG_MODE
-		sprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Loop %02X -- %04X %04X %04X\n",
-			v_counter,
-			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
-			data, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14));
-		log_cb(RETRO_LOG_ERROR, error_str);
-#endif
-
-
-		for( lcv = 0; lcv < 8; lcv++, data >>= 1 ) {
-			if( (data & 1) == 0 ) continue;
-
-			punchium_s.sfx[lcv].volume = *(uint16 *)(punchium_s.ram + 0x1E10);
-			punchium_s.sfx[lcv].panning = *(uint16 *)(punchium_s.ram + 0x1E12);
-			punchium_s.sfx[lcv].decay = *(uint16 *)(punchium_s.ram + 0x1E14);
-
-			punchium_s.sfx[lcv].loop = 1;
-
+		default:
+			handle_print_debug(cmd, data, argscnt, v_counter, punchium_cmd_count);
 			break;
-		}
-	}
-	goto done;
-
-
-sfx_off:
-	{
-		int flags;
-
-
-#if DEBUG_MODE
-		sprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Off %02X -- %04X\n",
-			v_counter,
-			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
-			data, *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
 #endif
-
-
-		flags = *(uint16 *)(punchium_s.ram + 0x1E10);
-
-
-		if(0) {}
-		//else if( flags == 6 ) {}
-		else if( flags == 0 ) {}
-		else {} //MessageBoxA(0, "Sfx_Off flags", "Warn", MB_OK );
-
-
-		for( lcv = 0; lcv < 8; lcv++ ) {
-			if( !(data & (1 << lcv) ) ) continue;
-
-			if( flags == 0 ) {
-				punchium_s.sfx[lcv].size = 0;
-			}
-
-			punchium_s.sfx[lcv].decay = flags;
-			punchium_s.sfx[lcv].loop = 0;
-
-			break;
-		}
 	}
-	goto done;
+
+	*(uint16_t*)(punchium_s.ram + 0x1FEA) &= 0x7FFF;
 }
-
 
 static int punchium_addr_test(uint32 address, int mode)
 {
-#if DEBUG_MODE == 0
+#if DEBUG_MODE
 	return 0;
 #endif
 
@@ -2496,21 +2311,21 @@ static int punchium_addr_test(uint32 address, int mode)
 
 #if 0
 	if( address >= 0x1290 && address < 0x1400 ) {
-		MessageBoxA(0, "address", "me", 0);
+		//MessageBoxA(0, "address", "me", 0);
 		return 0;
 	}
 #endif
 
 #if 0
 	if( address >= 0x1B40 && address < 0x1b90 ) {
-		MessageBoxA(0, "address 2", "me", 0);
+		//MessageBoxA(0, "address 2", "me", 0);
 		return 1;
 	}
 #endif
 
 #if 0
 	if( address >= 0xd80 && address < 0xf80 ) {
-		MessageBoxA(0, "address 3", "me", 0);
+		//MessageBoxA(0, "address 3", "me", 0);
 		return 1;
 	}
 #endif
@@ -2544,15 +2359,14 @@ static int punchium_addr_test(uint32 address, int mode)
 	return 1;
 }
 
-
-static uint32 punchium_r8(uint32 address)
+// Обработчики чтения из RAM (с эмуляцией регистров).
+static inline unsigned int FASTCALL punchium_r8(uint32 address)
 {
 	int data = punchium_s.ram[address^1];
 
-
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 0) ) {
-		sprintf(error_str, "[%04X:%04X] R8 %04X = %04X\n",
+		snprintf(error_str, "[%04X:%04X] R8 %04X = %04X\n",
 			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
 		log_cb(RETRO_LOG_ERROR, error_str);
@@ -2572,15 +2386,14 @@ static uint32 punchium_r8(uint32 address)
 	return data;
 }
 
-
-static uint32 punchium_r16(uint32 address)
+// Обработчики чтения из RAM (с эмуляцией регистров).
+static inline unsigned int FASTCALL punchium_r16(uint32 address)
 {
 	int data = 0;
 
-
 	if( (address == 0xC000) && (punchium_s.decoder_size > 0) ) {
 #if DEBUG_MODE
-		sprintf(error_str, "[%d] Decoder %X %X @ C000\n", v_counter, punchium_s.decoder_ptr, punchium_s.decoder_size);
+		snprintf(error_str, "[%d] Decoder %X %X @ C000\n", v_counter, punchium_s.decoder_ptr, punchium_s.decoder_size);
 		log_cb(RETRO_LOG_ERROR, error_str);
 #endif
 
@@ -2629,7 +2442,7 @@ static uint32 punchium_r16(uint32 address)
 
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 0) ) {
-		sprintf(error_str, "[%d] [%04X:%04X] R16 %04X = %04X\n",
+		snprintf(error_str, "[%d] [%04X:%04X] R16 %04X = %04X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
 		log_cb(RETRO_LOG_ERROR, error_str);
@@ -2639,12 +2452,12 @@ static uint32 punchium_r16(uint32 address)
 	return data;
 }
 
-
-static void punchium_w8(uint32 address, uint32 data)
+// Обработчики записи в RAM (с триггерами команд).
+static inline void FASTCALL punchium_w8(uint32 address, uint32 data)
 {
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 1) ) {
-		sprintf(error_str, "[%d] [%04X:%04X] W8 %04X = %02X\n",
+		snprintf(error_str, "[%d] [%04X:%04X] W8 %04X = %02X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
 		log_cb(RETRO_LOG_ERROR, error_str);
@@ -2654,12 +2467,12 @@ static void punchium_w8(uint32 address, uint32 data)
 	punchium_s.ram[address^1] = data;
 }
 
-
-static void punchium_w16(uint32 address, uint32 data)
+// Обработчики записи в RAM (с триггерами команд).
+static inline void FASTCALL punchium_w16(uint32 address, uint32 data)
 {
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 1) ) {
-		sprintf(error_str, "[%d] [%04X:%04X] W16 %04X = %04X\n",
+		snprintf(error_str, "[%d] [%04X:%04X] W16 %04X = %04X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
 		log_cb(RETRO_LOG_ERROR, error_str);
@@ -2669,25 +2482,24 @@ static void punchium_w16(uint32 address, uint32 data)
 #endif
 
 	*(uint16 *)(punchium_s.ram + address) = data;
-
+	
 	if( address == 0x1FEA ) {
 		punchium_cmd(data);
-
 		punchium_cmd_count = 0;
 	}
 }
 
-
-static uint32 punchium_io_r8(uint32 address)
+// Работа с IO-портами (TMSS, управление банками).
+static inline unsigned int FASTCALL punchium_io_r8(uint32 address)
 {
 	if( address == 0xA14101 )
 		return punchium_tmss;
 
-	ctrl_io_read_byte(address);
+	return ctrl_io_read_byte(address);
 }
 
-
-static void punchium_io_w8(uint32 address, uint32 data)
+// Работа с IO-портами (TMSS, управление банками).
+static inline void FASTCALL punchium_io_w8(uint32 address, uint32 data)
 {
 	if( address >= 0xA130F3 && address <= 0xA130FF )  /* no bank mapper */
 		return;
@@ -2700,14 +2512,14 @@ static void punchium_io_w8(uint32 address, uint32 data)
 	ctrl_io_write_byte(address, data);
 }
 
-
+// Настройка memory map для M68k: назначает обработчики чтения/записи для областей памяти (RAM, IO).
 static void punchium_map()
 {
-    m68k.memory_map[0x00].base    = punchium_s.ram;
-    m68k.memory_map[0x00].read8   = punchium_r8;
-    m68k.memory_map[0x00].read16  = punchium_r16;
-    m68k.memory_map[0x00].write8  = punchium_w8;
-    m68k.memory_map[0x00].write16 = punchium_w16;
+	m68k.memory_map[0x00].base	= punchium_s.ram;
+	m68k.memory_map[0x00].read8   = punchium_r8;
+	m68k.memory_map[0x00].read16  = punchium_r16;
+	m68k.memory_map[0x00].write8  = punchium_w8;
+	m68k.memory_map[0x00].write16 = punchium_w16;
 
 	m68k.memory_map[0xA1].read8  = punchium_io_r8;
 	m68k.memory_map[0xA1].write8 = punchium_io_w8;
@@ -2716,19 +2528,20 @@ static void punchium_map()
 	zbank_memory_map[0x00].write = punchium_w8;
 }
 
-
+// Первичная инициализация: настройка памяти, загрузка указателей на ресурсы (музыка, SFX, спрайты), патчинг ROM.
 static void punchium_init()
 {
 	int ptr;
 
 	punchium_map();
 
+	music_var_init ();
 
 	memset(&punchium_s, 0, sizeof(punchium_s));
 	memcpy(punchium_s.ram, cart.rom, 0x10000);
 
 
-#if 1  /* fast loadstate */
+	/* fast loadstate */
 	ptr = (*(uint16*)(cart.rom + 0xaf77c) << 16) + *(uint16*)(cart.rom + 0xaf77e);
 
 	punchium_music_ptr = (*(uint16*)(cart.rom + 0x10054)<< 16) + *(uint16*)(cart.rom + 0x10056);
@@ -2742,40 +2555,10 @@ static void punchium_init()
 	punchium_decoder_type(punchium_sprite_ptr, punchium_obj_ram);
 	punchium_s.decoder_size = 0;
 
-
-	if(0) {  /* www.wavpack.com */
-		/* warn: adding payload after 8MB ROM breaks Mega CD */
-
-		FILE *fp;
-
-#ifdef _WIN32
-		sprintf(error_str, "%s\\punchium\\punchium.wav", g_rom_dir);
-#else
-		sprintf(error_str, "%s/punchium/punchium.wav", g_rom_dir);
-#endif
-
-		fp = fopen(error_str, "rb");
-		if(!fp) {
-			//MessageBoxA(0,"help","r",0);
-			exit(1);
-		}
-		fseek(fp, 0x2C, SEEK_SET);
-		int size = fread(punchium_wave_ram, 1, 0x180000, fp);
-		for(int lcv = 0; lcv < size; lcv +=2 ) {
-			int data = *(uint16*)(punchium_wave_ram + lcv);
-			data = ((data & 0xFF00) >> 8) + ((data & 0x00FF) << 8);
-			*(uint16*)(punchium_wave_ram + lcv) = data;
-		}
-		fclose(fp);
-	}
-
 	*(uint16*)(punchium_s.ram + 0x192) = 0x3634;  /* 6-button, multitap */
-#endif
-
 
 	punchium_s.ram[0x1D1D^1] = 0x04;  /* rom ok - dynamic patch */
 	punchium_s.ram[0x1D2C^1] = 0x67;
-
 
 #if 1  /* boot hack */
 	*(uint16*) (punchium_s.ram + 0x1560) = 0x4EF9;
@@ -2783,9 +2566,7 @@ static void punchium_init()
 	*(uint16*) (punchium_s.ram + 0x1564) = 0x0100;
 #endif
 
-
 	fast_dma_hack = 1;  /* skip vram management */
-
 
 #if DEBUG_CHEAT  /* cheat - big hurt */
 	*(uint16*) (cart.rom + 0x9FE38 + 6) = 0x007F;	/* Tug */
@@ -2807,7 +2588,6 @@ static void punchium_init()
 	*(uint16*) (cart.rom + 0x9F7D8 + 6) = 0x007F;
 	*(uint16*) (cart.rom + 0x9F898 + 6) = 0x007F;
 #endif
-
 
 #if 1  /* WM text - pre-irq delay */
 	*(uint16*)(cart.rom + 0xb9094) = 0x2079;
@@ -2843,19 +2623,10 @@ static void punchium_init()
 	punchium_s.music_segment = -1;
 }
 
-
+// Полный сброс состояния игры: инициализирует MP3-декодер, сбрасывает флаги загрузки, очищает состояние звука/графики.
 static void punchium_reset()
 {
 	punchium_init();
-
-	mp3dec_init(&punchium_mp3d);
-
-	mp3dec_init(&punchium_mp3d_boss1);
-	mp3dec_init(&punchium_mp3d_boss2);
-	mp3dec_init(&punchium_mp3d_boss3);
-	mp3dec_init(&punchium_mp3d_boss4);
-	punchium_load_mp3_boss();
-
 
 	//extern int trace_start;
 	//trace_start = 1;
