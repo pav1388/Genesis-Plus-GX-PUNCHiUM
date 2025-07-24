@@ -578,7 +578,7 @@ static void punchium_music_synth(int *out_l, int *out_r)
 		}
 
 
-next:
+next:;
 	}
 
 
