@@ -2,7 +2,7 @@
  *  Genesis Plus
  *  Mega Drive cartridge hardware support
  *
- *  Copyright (C) 2007-2025  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 2007-2024  Eke-Eke (Genesis Plus GX)
  *
  *  Many cartridge protections were initially documented by Haze
  *  (http://haze.mameworld.info/)
@@ -93,6 +93,8 @@ static uint32 topshooter_r(uint32 address);
 static void topshooter_w(uint32 address, uint32 data);
 static uint32 tekken_regs_r(uint32 address);
 static void tekken_regs_w(uint32 address, uint32 data);
+
+#include "punchium.h"
 
 /* Games that need extra hardware emulation:
   - copy protection device
@@ -420,21 +422,6 @@ void md_cart_init(void)
         zbank_memory_map[sram.start >> 16].read   = sram_read_byte;
         zbank_memory_map[sram.start >> 16].write  = sram_write_byte;
       }
-
-      /* Barkley Shut Up and Jam 2 needs SRAM to be mapped in whole upper 2MB area */
-      if (strstr(rominfo.product,"T-119186") != NULL)
-      {
-        for (i=0x21; i<0x40; i++)
-        {
-          m68k.memory_map[i].base    = sram.sram;
-          m68k.memory_map[i].read8   = sram_read_byte;
-          m68k.memory_map[i].read16  = sram_read_word;
-          m68k.memory_map[i].write8  = sram_write_byte;
-          m68k.memory_map[i].write16 = sram_write_word;
-          zbank_memory_map[i].read   = sram_read_byte;
-          zbank_memory_map[i].write  = sram_write_byte;
-        }
-      }
     }
 
     /* support for Triple Play 96 & Triple Play - Gold Edition mapping */
@@ -583,6 +570,15 @@ void md_cart_init(void)
     cart.hw.time_w = mapper_t5740_w;
     cart.hw.time_r = eeprom_spi_read;
 
+    /* initialize SPI EEPROM board */
+    eeprom_spi_init();
+  }
+  else if (strstr(rominfo.product,"T-574120-00"))
+  {
+    cart.special |= HW_PUNCHIUM;
+
+	punchium_init();
+ 
     /* initialize SPI EEPROM board */
     eeprom_spi_init();
   }
@@ -863,6 +859,12 @@ void md_cart_reset(int hard_reset)
     megasd_reset();
   }
 
+  /* MegaSD hardware */
+  if (cart.special & HW_PUNCHIUM)
+  {
+    punchium_reset();
+  }
+
   /* SVP chip */
   if (svp)
   {
@@ -950,6 +952,11 @@ int md_cart_context_save(uint8 *state)
     bufferptr += megasd_context_save(&state[bufferptr]);
   }
 
+  if (cart.special & HW_PUNCHIUM)
+  {
+    save_param(&punchium_s, sizeof(punchium_s));
+  }
+
   return bufferptr;
 }
 
@@ -1010,6 +1017,15 @@ int md_cart_context_load(uint8 *state)
   if (cart.special & HW_MEGASD)
   {
     bufferptr += megasd_context_load(&state[bufferptr]);
+  }
+
+  if (cart.special & HW_PUNCHIUM)
+  {
+    load_param(&punchium_s, sizeof(punchium_s));
+
+	punchium_map();
+
+    log_cb(RETRO_LOG_ERROR, "\n\n\n  ############################\n\n\n");
   }
 
   return bufferptr;

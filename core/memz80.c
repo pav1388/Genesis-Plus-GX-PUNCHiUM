@@ -5,7 +5,7 @@
  *  Support for SG-1000, Mark-III, Master System, Game Gear & Mega Drive ports access
  *
  *  Copyright (C) 1998-2003  Charles Mac Donald (original code)
- *  Copyright (C) 2007-2025  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 2007-2024  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -111,7 +111,7 @@ static void z80_request_68k_bus_access(void)
   /* approximate 68k wait-states during Z80 access to 68k bus (cf https://docs.google.com/document/d/1ST9GbFfPnIjLT5loytFCm3pB0kWQ1Oe34DCBBV8saY8) */
   /* value is adjusted to get ride of graphical glitches in Rick Dangerous 2 title screen when bus refresh delays are also emulated and still get */
   /* "M68K DELAY ON Z80 ROM READ" test "passed" in Ti_'s test ROM (misc_test.bin), although the measured delay value is still slightly too high. */
-  m68k.cycles += (((Z80.cycles % 7) + 72)/7)*7;
+  m68k.cycles += ((Z80.cycles % 7) + 68);
 
   /* average Z80 wait-states when accessing 68k bus (cf https://docs.google.com/document/d/1ST9GbFfPnIjLT5loytFCm3pB0kWQ1Oe34DCBBV8saY8) */
   Z80.cycles += (3 * 15);
@@ -152,6 +152,14 @@ unsigned char z80_memory_r(unsigned int address)
 
       /* read from 68k banked area */
       address = zbank | (address & 0x7FFF);
+
+	if(0)
+	{
+		static FILE *fp = 0;
+		if(!fp) fp = fopen("trace-z80-mem.txt", "w");
+		fprintf(fp, "%X - %X %X - %X %X %X %X\n", address, Z80.pc.w.l, zbank, Z80.af.b.h, Z80.bc.w.l, Z80.de.w.l, Z80.hl.w.l);
+	}
+
       if (zbank_memory_map[address >> 16].read)
       {
         return (*zbank_memory_map[address >> 16].read)(address);
@@ -164,6 +172,16 @@ unsigned char z80_memory_r(unsigned int address)
 
 void z80_memory_w(unsigned int address, unsigned char data)
 {
+#if 0
+	static char error_str[512];
+	sprintf(error_str, "[%d] Z80 %04X = %X\n",
+		v_counter,
+		address, data
+	);
+	log_cb(RETRO_LOG_ERROR, error_str);
+#endif
+
+
   switch((address >> 13) & 7)
   {
     case 0: /* $0000-$3FFF: Z80 RAM (8K mirrored) */
@@ -175,6 +193,26 @@ void z80_memory_w(unsigned int address, unsigned char data)
 
     case 2: /* $4000-$5FFF: YM2612 */
     {
+#if 0
+if( address == 0x4000 && data != 0x2A && data != 0x2B && data != 0xB6 ) {
+	static char error_str[512];
+	sprintf(error_str, "[%d] Z80 %04X = %X\n",
+		v_counter,
+		address, data
+	);
+	log_cb(RETRO_LOG_ERROR, error_str);
+}
+
+if( address == 0x4002 && data != 0x2A && data != 0x2B && data != 0xB6 ) {
+	static char error_str[512];
+	sprintf(error_str, "[%d] Z80 %04X = %X\n",
+		v_counter,
+		address, data
+	);
+	log_cb(RETRO_LOG_ERROR, error_str);
+}
+#endif
+
       fm_write(Z80.cycles, address & 3, data);
       return;
     }

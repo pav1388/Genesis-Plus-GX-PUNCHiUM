@@ -2,7 +2,7 @@
  *  Genesis Plus
  *  Mega CD / Sega CD hardware
  *
- *  Copyright (C) 2012-2025  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 2012-2024  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -37,6 +37,8 @@
  ****************************************************************************************/
 
 #include "shared.h"
+
+extern int8 reset_do_not_clear_buffers;
 
 /*--------------------------------------------------------------------------*/
 /* Unused area (return open bus data, i.e prefetched instruction word)      */
@@ -1774,10 +1776,13 @@ void scd_init(void)
   scd.cycles_per_line = (uint32) (MCYCLES_PER_LINE * ((float)SCD_CLOCK / (float)system_clock));
 
   /* Clear RAM */
-  memset(scd.prg_ram, 0x00, sizeof(scd.prg_ram));
-  memset(scd.word_ram, 0x00, sizeof(scd.word_ram));
-  memset(scd.word_ram_2M, 0x00, sizeof(scd.word_ram_2M));
-  memset(scd.bram, 0x00, sizeof(scd.bram));
+  if (!reset_do_not_clear_buffers)
+  {
+    memset(scd.prg_ram, 0x00, sizeof(scd.prg_ram));
+    memset(scd.word_ram, 0x00, sizeof(scd.word_ram));
+    memset(scd.word_ram_2M, 0x00, sizeof(scd.word_ram_2M));
+    memset(scd.bram, 0x00, sizeof(scd.bram));
+  }
 }
 
 void scd_reset(int hard)
@@ -1910,7 +1915,7 @@ void scd_update(unsigned int cycles)
     {
       /* adjust Sub-CPU and Main-CPU end cycle counters up to Timer interrupt occurence */
       s68k_run_cycles = scd.timer;
-      m68k_end_cycles = ((scd.cycles + s68k_run_cycles) * MCYCLES_PER_LINE) / SCYCLES_PER_LINE;
+      m68k_end_cycles = mcycles_vdp + ((s68k_run_cycles * MCYCLES_PER_LINE) / SCYCLES_PER_LINE);
     }
     else
     {

@@ -87,6 +87,14 @@ int audio_init(int samplerate, double framerate)
     }
   }
 
+  /* Cart sound */
+  snd.blips[3] = blip_new(samplerate / 10);
+  if (!snd.blips[3])
+  {
+    audio_shutdown();
+    return -1;
+  }
+
   /* Initialize resampler internal rates */
   audio_set_rate(samplerate, framerate);
 
@@ -143,6 +151,8 @@ void audio_set_rate(int samplerate, double framerate)
     cdd_init(samplerate);
   }
 
+  blip_set_rates(snd.blips[3], 48000, samplerate);
+
   /* Reinitialize internal rates */
   snd.sample_rate = samplerate;
   snd.frame_rate  = framerate;
@@ -153,7 +163,7 @@ void audio_reset(void)
   int i;
   
   /* Clear blip buffers */
-  for (i=0; i<3; i++)
+  for (i=0; i<4; i++)
   {
     if (snd.blips[i])
     {
@@ -183,9 +193,10 @@ void audio_shutdown(void)
   int i;
   
   /* Delete blip buffers */
-  for (i=0; i<3; i++)
+  for (i=0; i<4; i++)
   {
-    blip_delete(snd.blips[i]);
+    if (snd.blips[i])
+      blip_delete(snd.blips[i]);
     snd.blips[i] = 0;
   }
 }
@@ -195,8 +206,22 @@ int audio_update(int16 *buffer)
   /* run sound chips until end of frame */
   int size = sound_update(mcycles_vdp);
 
+  if (cart.special & HW_PUNCHIUM)
+  {
+    extern void punchium_audio(int samples);
+    punchium_audio(size);
+
+#ifdef ALIGN_SND
+    /* return an aligned number of samples if required */
+    size &= ALIGN_SND;
+#endif
+
+    /* resample & mix FM/PSG, PCM & Cart streams to output buffer */
+    blip_mix_samples_2(snd.blips[0], snd.blips[3], buffer, size);
+  }
+
   /* Mega CD sound hardware enabled ? */
-  if (snd.blips[1] && snd.blips[2])
+  else if (snd.blips[1] && snd.blips[2])
   {
     /* sync PCM chip with other sound chips */
     pcm_update(size);

@@ -2,7 +2,7 @@
  *  Genesis Plus
  *  CD drive processor & CD-DA fader
  *
- *  Copyright (C) 2012-2025  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 2012-2024  Eke-Eke (Genesis Plus GX)
  *
  *  Redistribution and use of this code or any derivative works are permitted
  *  provided that the following conditions are met:
@@ -37,6 +37,8 @@
  ****************************************************************************************/
 #include "shared.h"
 #include "megasd.h"
+
+extern int8 audio_hard_disable;
 
 #if defined(USE_LIBTREMOR) || defined(USE_LIBVORBIS)
 #define SUPPORTED_EXT 20
@@ -155,15 +157,17 @@ static const char extensions[SUPPORTED_EXT][16] =
 
 #if defined(USE_LIBTREMOR) || defined(USE_LIBVORBIS)
 
-static int ov_cdStreamSeek(void *f,ogg_int64_t off,int whence)
-	{ return cdStreamSeek(f,off,whence); }
-static size_t ov_cdStreamRead(void *buf, size_t sz, size_t n, void *f)
-	{ return cdStreamRead(buf,sz,n,f); }
-static int ov_cdStreamClose(void *f)
-	{ return cdStreamClose(f); }
-static long ov_cdStreamTell(void *f)
-	{ return cdStreamTell(f); }
-static ov_callbacks cb = { ov_cdStreamRead, ov_cdStreamSeek, ov_cdStreamClose, ov_cdStreamTell };
+static int seek64_wrap(void *f,ogg_int64_t off,int whence){
+  return cdStreamSeek(f,off,whence);
+}
+
+static ov_callbacks cb =
+{ 
+  (size_t (*)(void *, size_t, size_t, void *))  cdStreamRead,
+  (int (*)(void *, ogg_int64_t, int))           seek64_wrap,
+  (int (*)(void *))                             cdStreamClose,
+  (long (*)(void *))                            cdStreamTell
+};
 
 #ifdef DISABLE_MANY_OGG_OPEN_FILES
 static void ogg_free(int i)
@@ -188,7 +192,8 @@ void cdd_init(int samplerate)
 {
   /* CD-DA is running by default at 44100 Hz */
   /* Audio stream is resampled to desired rate using Blip Buffer */
-  blip_set_rates(snd.blips[2], 44100, samplerate);
+  //blip_set_rates(snd.blips[2], 44100, samplerate);
+  blip_set_rates(snd.blips[2], 48000, samplerate);	/* punchium hack */
 }
 
 void cdd_reset(void)
@@ -404,6 +409,16 @@ int cdd_load(char *filename, char *header)
       cdStreamClose(fd);
       return -1;
     }
+
+#ifdef __LIBRETRO__
+    if (config.cd_precache)
+    {
+      log_cb(RETRO_LOG_INFO, "Pre-caching \"%s\" ...\n", filename);
+      if (chd_precache(cdd.chd.file) != CHDERR_NONE)
+        return -1;
+      log_cb(RETRO_LOG_INFO, "Pre-cache done.\n");
+    }
+#endif
 
     /* retrieve CHD header */
     head = chd_get_header(cdd.chd.file);
@@ -657,9 +672,18 @@ int cdd_load(char *filename, char *header)
       if (!(memcmp(lptr, "FILE", 4)))
       {
         /* retrieve current path */
-        ptr = fname + strlen(fname) - 1;
-        while ((ptr - fname) && (*ptr != '/') && (*ptr != '\\')) ptr--;
-        if (ptr - fname) ptr++;
+        if (strstr(lptr, "://"))
+        {
+          /* URIs do not get filtered */
+          ptr = fname;
+        }
+        else
+        {
+          /* this removes all directories from the path and just leaves the filename */
+          ptr = fname + strlen(fname) - 1;
+          while ((ptr - fname) && (*ptr != '/') && (*ptr != '\\')) ptr--;
+          if (ptr - fname) ptr++;
+        }
 
         /* skip "FILE" attribute */
         lptr += 4;
@@ -1464,6 +1488,38 @@ void cdd_read_audio(unsigned int samples)
     /* CD-DA fader volume setup (0-1024) */
     int endVol = cdd.fader[1];
 
+	if (audio_hard_disable)
+    {
+      if (endVol > curVol)
+      {
+        if (endVol - curVol < samples)
+        {
+          curVol = endVol;
+        }
+        else
+        {
+          curVol += samples;
+        }
+      }
+      else if (curVol > endVol)
+      {
+        if (curVol - endVol < samples)
+        {
+          curVol = endVol;
+        }
+        else
+        {
+          curVol -= samples;
+        }
+      }
+
+      /* save current CD-DA fader volume */
+      cdd.fader[0] = curVol;
+
+      blip_end_frame(snd.blips[2], samples);
+      return;
+    }
+
     /* read samples from current block */
 #if defined(USE_LIBCHDR)
     if (cdd.chd.file)
@@ -1753,159 +1809,158 @@ static void cdd_read_subcode(void)
 void cdd_update(void)
 {  
 #ifdef LOG_CDD
-  error("LBA = %d (track %d)(latency=%d)(status=0x%x)(pending=0x%x)\n", cdd.lba, cdd.index, cdd.latency, cdd.status, cdd.pending);
+  error("LBA = %d (track %d)(latency=%d)\n", cdd.lba, cdd.index, cdd.latency);
 #endif
 
   /* drive latency */
   if (cdd.latency > 0)
   {
     cdd.latency--;
+    return;
   }
-  else
+
+  /* reading disc */
+  if (cdd.status == CD_PLAY)
   {
-    /* reading disc */
-    if (cdd.status == CD_PLAY)
+    /* end of disc detection */
+    if (cdd.index >= cdd.toc.last)
     {
-      /* end of disc detection */
-      if (cdd.index >= cdd.toc.last)
-      {
-        cdd.status = CD_END;
-        return;
-      }
+      cdd.status = CD_END;
+      return;
+    }
 
-      /* subcode data processing */
-      if (cdd.toc.sub)
-      {
-        cdd_read_subcode();
-      }
+    /* subcode data processing */
+    if (cdd.toc.sub)
+    {
+      cdd_read_subcode();
+    }
 
-      /* track type */
-      if (cdd.toc.tracks[cdd.index].type)
-      {
-        /* CD-ROM sector header */
-        uint8 header[4];
-        uint32 msf = cdd.lba + 150;
-        header[0] = lut_BCD_8[(msf / 75) / 60];
-        header[1] = lut_BCD_8[(msf / 75) % 60];
-        header[2] = lut_BCD_8[(msf % 75)];
-        header[3] = cdd.toc.tracks[cdd.index].type;
+    /* track type */
+    if (cdd.toc.tracks[cdd.index].type)
+    {
+      /* CD-ROM sector header */
+      uint8 header[4];
+      uint32 msf = cdd.lba + 150;
+      header[0] = lut_BCD_8[(msf / 75) / 60];
+      header[1] = lut_BCD_8[(msf / 75) % 60];
+      header[2] = lut_BCD_8[(msf % 75)];
+      header[3] = cdd.toc.tracks[cdd.index].type;
 
-        /* decode CD-ROM track sector */
-        cdc_decoder_update(*(uint32 *)(header));
-      }
-      else
-      {
-        /* check against audio track start index */
-        if (cdd.lba >= cdd.toc.tracks[cdd.index].start)
-        {
-          /* audio track playing */
-          scd.regs[0x36>>1].byte.h = 0x00;
-        }
-
-        /* audio blocks are still sent to CDC as well as CD DAC/Fader */
-        cdc_decoder_update(0);
-      }
-
-      /* read next sector */
-      cdd.lba++;
-
-      /* check end of current track */
-      if (cdd.lba >= cdd.toc.tracks[cdd.index].end)
-      {
-        /* seek to next track start (assuming it can only be an audio track) */
-        cdd_seek_audio(cdd.index + 1, cdd.toc.tracks[cdd.index + 1].start);
-
-        /* increment current track index */
-        cdd.index++;
-
-        /* PAUSE between tracks */
-        scd.regs[0x36>>1].byte.h = 0x01;
-      }
+      /* decode CD-ROM track sector */
+      cdc_decoder_update(*(uint32 *)(header));
     }
     else
     {
-      /* CDC decoder is still running while disc is not being read (fixes MCD-verificator CDC Flags Test #30) */
-      cdc_decoder_update(0);
-
-      /* scanning disc */
-      if (cdd.status == CD_SCAN)
+      /* check against audio track start index */
+      if (cdd.lba >= cdd.toc.tracks[cdd.index].start)
       {
-        /* current track index */
-        int index = cdd.index;
+        /* audio track playing */
+        scd.regs[0x36>>1].byte.h = 0x00;
+      }
 
-        /* fast-forward or fast-rewind */
-        cdd.lba += cdd.scanOffset;
+      /* audio blocks are still sent to CDC as well as CD DAC/Fader */
+      cdc_decoder_update(0);
+    }
 
-        /* check current track limits */
-        if (cdd.lba >= cdd.toc.tracks[index].end)
+    /* read next sector */
+    cdd.lba++;
+
+    /* check end of current track */
+    if (cdd.lba >= cdd.toc.tracks[cdd.index].end)
+    {
+      /* seek to next track start (assuming it can only be an audio track) */
+      cdd_seek_audio(cdd.index + 1, cdd.toc.tracks[cdd.index + 1].start);
+
+      /* increment current track index */
+      cdd.index++;
+
+      /* PAUSE between tracks */
+      scd.regs[0x36>>1].byte.h = 0x01;
+    }
+  }
+  else
+  {
+    /* CDC decoder is still running while disc is not being read (fixes MCD-verificator CDC Flags Test #30) */
+    cdc_decoder_update(0);
+
+    /* scanning disc */
+    if (cdd.status == CD_SCAN)
+    {
+      /* current track index */
+      int index = cdd.index;
+
+      /* fast-forward or fast-rewind */
+      cdd.lba += cdd.scanOffset;
+
+      /* check current track limits */
+      if (cdd.lba >= cdd.toc.tracks[index].end)
+      {
+        /* next track */
+        index++;
+
+        /* check disc limits */
+        if (index < cdd.toc.last)
         {
-          /* next track */
-          index++;
-
-          /* check disc limits */
-          if (index < cdd.toc.last)
-          {
-            /* skip directly to next track start position */
-            cdd.lba = cdd.toc.tracks[index].start;
-          }
-          else
-          {
-            /* end of disc */
-            cdd.lba = cdd.toc.end;
-            cdd.index = cdd.toc.last;
-            cdd.status = CD_END;
-
-            /* no audio track playing */
-            scd.regs[0x36>>1].byte.h = 0x01;
-            return;
-          }
-        }
-        else if (cdd.lba < cdd.toc.tracks[index].start)
-        {
-          /* check disc limits */
-          if (index > 0)
-          {
-            /* previous track */
-            index--;
-
-            /* skip directly to previous track end position */
-            cdd.lba = cdd.toc.tracks[index].end;
-          }
-          else
-          {
-            /* start of first track */
-            cdd.lba = 0;
-          }
-        }
-
-        /* seek to current subcode position */
-        if (cdd.toc.sub)
-        {
-          cdStreamSeek(cdd.toc.sub, cdd.lba * 96, SEEK_SET);
-        }
-
-        /* current track is an audio track ? */
-        if (cdd.toc.tracks[index].type == TYPE_AUDIO)
-        {
-          /* seek to current track sector */
-          cdd_seek_audio(index, cdd.lba);
-
-          /* audio track playing */
-          scd.regs[0x36>>1].byte.h = 0x00;
+          /* skip directly to next track start position */
+          cdd.lba = cdd.toc.tracks[index].start;
         }
         else
         {
+          /* end of disc */
+          cdd.lba = cdd.toc.end;
+          cdd.index = cdd.toc.last;
+          cdd.status = CD_END;
+
           /* no audio track playing */
           scd.regs[0x36>>1].byte.h = 0x01;
+          return;
         }
-
-        /* udpate current track index */
-        cdd.index = index;
       }
+      else if (cdd.lba < cdd.toc.tracks[index].start)
+      {
+        /* check disc limits */
+        if (index > 0)
+        {
+          /* previous track */
+          index--;
+
+          /* skip directly to previous track end position */
+          cdd.lba = cdd.toc.tracks[index].end;
+        }
+        else
+        {
+          /* start of first track */
+          cdd.lba = 0;
+        }
+      }
+
+      /* seek to current subcode position */
+      if (cdd.toc.sub)
+      {
+        cdStreamSeek(cdd.toc.sub, cdd.lba * 96, SEEK_SET);
+      }
+
+      /* current track is an audio track ? */
+      if (cdd.toc.tracks[index].type == TYPE_AUDIO)
+      {
+        /* seek to current track sector */
+        cdd_seek_audio(index, cdd.lba);
+
+        /* audio track playing */
+        scd.regs[0x36>>1].byte.h = 0x00;
+      }
+      else
+      {
+        /* no audio track playing */
+        scd.regs[0x36>>1].byte.h = 0x01;
+      }
+
+      /* udpate current track index */
+      cdd.index = index;
     }
   }
 
-  /* check if seek/play command is pending */
+  /* check if seeking is pending */
   if (cdd.pending)
   {
     /* reset track index */

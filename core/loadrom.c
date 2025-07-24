@@ -587,6 +587,7 @@ int load_rom(char *filename)
   {
     /* enable CD hardware */
     system_hw = SYSTEM_MCD;
+
   }
   else
   {
@@ -621,6 +622,11 @@ int load_rom(char *filename)
     if (!memcmp("SMS", &extension[0], 3))
     {
       /* Master System II hardware */
+      system_hw = SYSTEM_SMS2;
+    }
+    else if (!memcmp("BMS", &extension[0], 3))
+    {
+      /* Master System II hardware but it's Brazil because TecToy is weird */
       system_hw = SYSTEM_SMS2;
     }
     else if (!memcmp("GG", &extension[1], 2))
