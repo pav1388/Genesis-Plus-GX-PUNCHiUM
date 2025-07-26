@@ -28,7 +28,6 @@ Project Little Man
 #define MAX_TILE_CACHE_ENTRIES (TILE_CACHE_SIZE * 2)
 #define MAX_TILE_SIZE 512
 
-#define DEBUG_CHEAT 0
 #define DEBUG_MODE 0
 #define DEBUG_SPRITE 0
 
@@ -55,8 +54,8 @@ Project Little Man
 #define DR_WAV_IMPLEMENTATION
 #include "dr_wav.h"
 
-#define STB_VORBIS_HEADER_ONLY
-#include "stb_vorbis.c"
+#define MY_STB_VORBIS_HEADER_ONLY
+#include "stb_vorbis_my.c"
 
 #ifdef __arm__ // rand/srand for ARM
 static uint32_t rng_state;
@@ -134,7 +133,7 @@ struct punchium_track_t {
 	int sync_tick;				// Коэффициент синхронизации
 	int8_t track_last;			  // Текущий трек
 	// Форматы аудио
-	int8_t file_type;			   // mp3/wav/ogg
+	// int8_t file_type;			   // mp3/wav/ogg
 	int16_t *buffer;				// PCM-данные (L/R)
 	uint16_t sample_rate;		   // 48000, 44100 и т.д.
 	uint16_t channels;			  // 1 (моно) или 2 (стерео)
@@ -144,7 +143,7 @@ struct punchium_track_t {
 	mp3dec_file_info_t mp3_info;	// Инфо MP3
 	drwav wav;					  // WAV-декодер
 	stb_vorbis *vorbis;			 // OGG-декодер
-	stb_vorbis_info vorbis_info;	// Инфо OGG
+	my_stb_vorbis_info vorbis_info;	// Инфо OGG
 	int samples_read;			   // Прочитано сэмплов
 } punchium_track;
 
@@ -336,7 +335,7 @@ static void music_var_init (){
 	punchium_track.sync_tick = 0;
 	punchium_track.track_last = 0;
 	punchium_track.channels = 2;
-	punchium_track.file_type = 0;
+	// punchium_track.file_type = 0;
 	punchium_track.sample_rate = 0;
 	punchium_track.total_samples = 0;
 	punchium_track.buffer = NULL;
@@ -344,7 +343,7 @@ static void music_var_init (){
 	memset(&punchium_track.mp3_info, 0, sizeof(mp3dec_file_info_t));
 	memset(&punchium_track.wav, 0, sizeof(drwav));
 	punchium_track.vorbis = NULL;
-	memset(&punchium_track.vorbis_info, 0, sizeof(stb_vorbis_info));
+	memset(&punchium_track.vorbis_info, 0, sizeof(my_stb_vorbis_info));
 	punchium_track.samples_read = 0;
 }
 
@@ -397,7 +396,7 @@ static void punchium_load_music_file(int track, int reload) {
 	memset(&punchium_track.wav, 0, sizeof(drwav));
 	
 	if (punchium_track.vorbis) {
-		stb_vorbis_close(punchium_track.vorbis);
+		my_stb_vorbis_close(punchium_track.vorbis);
 		punchium_track.vorbis = NULL;
 	}
 	
@@ -506,30 +505,30 @@ static void punchium_load_music_file(int track, int reload) {
 				}
 							
 				int error = 0;
-				punchium_track.vorbis = stb_vorbis_open_filename(full_path, &error, NULL);
+				punchium_track.vorbis = my_stb_vorbis_open_filename(full_path, &error, NULL);
 				if (!punchium_track.vorbis) {
 					continue;
 				}
 				
-				punchium_track.vorbis_info = stb_vorbis_get_info(punchium_track.vorbis);
+				punchium_track.vorbis_info = my_stb_vorbis_get_info(punchium_track.vorbis);
 				punchium_track.sample_rate = punchium_track.vorbis_info.sample_rate;
 				punchium_track.channels = punchium_track.vorbis_info.channels;
-				punchium_track.total_samples = stb_vorbis_stream_length_in_samples(punchium_track.vorbis);
+				punchium_track.total_samples = my_stb_vorbis_stream_length_in_samples(punchium_track.vorbis);
 				size_t total_samples = punchium_track.total_samples * punchium_track.channels;
 				punchium_track.buffer = (short*)malloc(total_samples * sizeof(short));
 				
 				if (!punchium_track.buffer) {
-					stb_vorbis_close(punchium_track.vorbis);
+					my_stb_vorbis_close(punchium_track.vorbis);
 					punchium_track.vorbis = NULL;
 					continue;
 				}
-				punchium_track.samples_read = stb_vorbis_get_samples_short_interleaved(
+				punchium_track.samples_read = my_stb_vorbis_get_samples_short_interleaved(
 					punchium_track.vorbis, 
 					punchium_track.channels, 
 					punchium_track.buffer, 
 					total_samples);
 				
-				stb_vorbis_close(punchium_track.vorbis);
+				my_stb_vorbis_close(punchium_track.vorbis);
 				punchium_track.vorbis = NULL;
 				
 				if (punchium_track.samples_read <= 0) {
@@ -2759,7 +2758,6 @@ static void punchium_init()
 
 	fast_dma_hack = 1;  /* skip vram management */
 
-// #if DEBUG_CHEAT 
 	if (punchium_cheat_saitama) { /* cheat - big hurt */
 		*(uint16*) (cart.rom + 0x9FE38 + 6) = 0x007F;	/* Tug */
 		*(uint16*) (cart.rom + 0x9FE58 + 6) = 0x007F;
@@ -2780,7 +2778,6 @@ static void punchium_init()
 		*(uint16*) (cart.rom + 0x9F7D8 + 6) = 0x007F;
 		*(uint16*) (cart.rom + 0x9F898 + 6) = 0x007F;
 	}
-// #endif
 
 #if 1  /* WM text - pre-irq delay */
 	*(uint16*)(cart.rom + 0xb9094) = 0x2079;
