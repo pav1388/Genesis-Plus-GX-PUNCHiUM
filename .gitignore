@@ -16,3 +16,8 @@ sdl/build_sdl2
 
 *.o
 *.a
+*.d
+*.mp3
+*.wav
+*.ogg
+*.bin
