@@ -948,7 +948,7 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 static void punchium_decoder_lzo(uint src, uint8 *dst)
 {
 	int size = 0;
-	int len, lz, raw;
+	int len = 0, lz = 0, raw = 0;
 	int state = 0;
 
 
