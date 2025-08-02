@@ -52,6 +52,8 @@ main_menu() {
     echo
     echo "  0) Exit"
     echo
+    echo "Place original MP3 files in 'music-original' folder"
+    echo
     
     read -p "Select format [1-3,0]: " choice
     

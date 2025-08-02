@@ -1022,10 +1022,8 @@ int md_cart_context_load(uint8 *state)
   if (cart.special & HW_PUNCHIUM)
   {
     load_param(&punchium_s, sizeof(punchium_s));
-
 	punchium_map();
-
-    log_cb(RETRO_LOG_ERROR, "\n\n\n  ############################\n\n\n");
+    // log_cb(RETRO_LOG_ERROR, "\n\n\n  ############################\n\n\n");
   }
 
   return bufferptr;

@@ -52,6 +52,8 @@ echo  3) OGG
 echo.
 echo  0) Exit
 echo.
+echo Place original MP3 files in 'music-original' folder
+echo.
 choice /C 1230 /M "Select format "
 set "command_line=-c:a"
 if %errorlevel% equ 1 set "format=wav"&goto CODEC_WAV
