@@ -31,6 +31,14 @@ Project Little Man
 #define DEBUG_MODE 0
 #define DEBUG_SPRITE 0
 
+#if (DEBUG_MODE || DEBUG_SPRITE)
+#define DEBUG_OUTPUT(d) log_cb(RETRO_LOG_ERROR, d)
+extern retro_log_printf_t log_cb;
+static char error_str[1024];
+// #define DEBUG_OUTPUT(...) write_log_vita(__VA_ARGS__)
+// #define DEBUG_OUTPUT(d) gUi->AppendLog(d)
+#endif // DEBUG_MODE
+
 #ifdef _WIN32
     #define FASTCALL __fastcall
     #include <windows.h>
@@ -76,8 +84,6 @@ extern char g_rom_dir[256]; // путь к папке с ROM
 extern T_SRAM sram;
 extern uint8_t punchium_audio_track_format;
 extern bool punchium_cheat_saitama;
-extern retro_log_printf_t log_cb;
-static char error_str[1024];
 
 static uint8 punchium_obj_ram[0x80000];
 // static uint8 punchium_wave_ram[0x180000];
@@ -275,7 +281,7 @@ static uint32_t find_replacement_slot() {
 	}
 }
 
-static void punchium_decoder_type_cached(uint32_t src, uint8_t *dst)
+static void tile_cache_decoder(uint32_t src, uint8_t *dst)
 {
 	// Если кэш выключен, просто декомпрессируем
 	if (!punchium_tile_cache || !tile_cache.entries) {
@@ -643,9 +649,8 @@ static void punchium_music_sheet()
 
 			else if( code == 0x08 ) {
 #if 0
-				snprintf(error_str, "08 - %X %X %X\n", ch, ptr, arg);
-				log_cb(RETRO_LOG_ERROR, error_str);
-				//MessageBoxA(0, error_str, "---", 0);
+				snprintf(error_str, sizeof(error_str), "08 - %X %X %X\n", ch, ptr, arg);
+				DEBUG_OUTPUT(error_str);
 #endif
 
 				freq = arg;
@@ -653,27 +658,24 @@ static void punchium_music_sheet()
 
 			else if( code == 0x0A ) {
 #if 0
-				snprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
-				log_cb(RETRO_LOG_ERROR, error_str);
-				//MessageBoxA(0, error_str, "---", 0);
+				snprintf(error_str, sizeof(error_str), "0B - %X %X %X\n", ch, ptr, arg);
+				DEBUG_OUTPUT(error_str);
 #endif			
 				freq = 0;  /* faster ? */
 			}
 
 			else if( code == 0x0B ) {
 #if 0
-				snprintf(error_str, "0B - %X %X %X\n", ch, ptr, arg);
-				log_cb(RETRO_LOG_ERROR, error_str);
+				snprintf(error_str, sizeof(error_str), "0B - %X %X %X\n", ch, ptr, arg);
+				DEBUG_OUTPUT(error_str);
 #endif
-				//MessageBoxA(0, error_str, "---", 0);
 			}
 
 			else if( code == 0x0C ) {
 #if 0
-				snprintf(error_str, "0C - %X %X %X\n", ch, ptr, arg);
-				log_cb(RETRO_LOG_ERROR, error_str);
+				snprintf(error_str, sizeof(error_str), "0C - %X %X %X\n", ch, ptr, arg);
+				DEBUG_OUTPUT(error_str);
 #endif
-				//MessageBoxA(0, error_str, "---", 0);
 			}
 
 			else if( code == 0x0E ) {  /* stop ? */
@@ -695,8 +697,8 @@ static void punchium_music_sheet()
 				}
 
 #if DEBUG_MODE
-				snprintf(error_str, "[%d] Sample %X %X\n", ch, arg, ptr);
-				log_cb(RETRO_LOG_ERROR, error_str);
+				snprintf(error_str, sizeof(error_str), "[%d] Sample %X %X\n", ch, arg, ptr);
+				DEBUG_OUTPUT(error_str);
 #endif
 			}
 		}
@@ -723,7 +725,6 @@ static void punchium_music_sheet()
 
 		if( freq >= 0 ) {
 			voice->type = freq;
-			//if(ch == 16-1) //MessageBoxA(0,"hit","-",0);
 		}
 
 next:
@@ -768,85 +769,96 @@ static void punchium_music_player(int *out_l, int *out_r) {
 }
 
 
-static void punchium_sfx_voice(int *out_l, int *out_r) {
-    static const int _rates[] = {1 << 16, 2 << 16, 4 << 16, 5 << 16, 8 << 16, 9 << 16};
-    int l = 0, r = 0;
+static void punchium_sfx_voice(int *out_l, int *out_r)
+{
+	int ch;
+	int l = 0, r = 0;
 
-    for (int ch = 0; ch < 8; ch++) {
-        punchium_voice_t *voice = punchium_s.sfx + ch;
-        if (voice->size == 0) continue;
+	for( ch = 0; ch < 8; ch++ ) {
+		punchium_voice_t *voice = punchium_s.sfx + ch;
+		const int _rates[] = {1,2,4,5,8,9};  /* 48000, 24000, 12000, 9600, 6000, 5333 */
 
-        // Чтение сэмпла (оригинальный способ)
-        uint8 sample_byte = *(uint8 *)(cart.rom + punchium_sfx_ptr + (voice->ptr ^ 1));
-        int sample;
+		int rate = _rates[voice->type >> 4] << 16;  /* 16.16 */
+		int depth = voice->type & 0x03;
+		/* voice->type & 0xC0; */
 
-        // Обработка глубины звука (как в оригинале)
-        int depth = voice->type & 0x03;
-        if (depth == 1) {
-            sample = (sample_byte * 256) - 32768;  // 8-бит -> 16-бит со знаком
-        } else if (depth == 2) {
-            sample = (voice->count == 0) ? (sample_byte >> 4) : (sample_byte & 0x0F);
-            sample = (sample * 4096) - 32768;  // 4-бит -> 16-бит со знаком
-        } else {
-            sample = 0;  // Неподдерживаемый формат
-        }
+		int vol = voice->volume;
+		int pan = voice->panning;
 
-        // Применение громкости (деление, как в оригинале)
-        sample = (sample * voice->volume) / 0x400;
+		int sample, sample_l, sample_r;
 
-        // Панорамирование (деление, а не сдвиг!)
-        int pan = voice->panning;
-        int sample_l = (sample * ((pan <= 0x80) ? 0x80 : (0x100 - pan))) / 0x80;
-        int sample_r = (sample * ((pan >= 0x80) ? 0x80 : pan)) / 0x80;
 
-        l += sample_l;
-        r += sample_r;
+		if( voice->size == 0 ) goto next;
 
-        // Эхо-эффект (как в оригинале)
-        if (voice->flags & 0x4000) {
-            if (voice->echo & 1) {
-                punchium_s.echo_l[punchium_s.echo_ptr % (48000/6)] += (sample_l * 33) / 100;
-            } else {
-                punchium_s.echo_r[punchium_s.echo_ptr % (48000/6)] += (sample_r * 33) / 100;
-            }
-        }
+		sample = *(uint8 *)(cart.rom + punchium_sfx_ptr + (voice->ptr^1));
 
-        // Усиление (как в оригинале)
-        if (voice->flags & 0x100) {
-            l = (l * 125) / 100;
-            r = (r * 125) / 100;
-        }
-		
+		if( depth == 1 )
+			sample = (((sample & 0xFF) * 65536) / 256) - 32768;
+
+		else if( depth == 2 ) {
+			if( voice->count == 0 )
+				sample >>= 4;
+
+			sample = (((sample & 0x0F) * 65536) / 16) - 32768;
+		}
+
+
+		sample = (sample * vol) / 0x400;
+
+		sample_l = (sample * ((pan <= 0x80) ? 0x80 : 0x100 - pan)) / 0x80;
+		sample_r = (sample * ((pan >= 0x80) ? 0x80 : pan)) / 0x80;
+
+		l += sample_l;
+		r += sample_r;
+
+
+		if( voice->flags & 0x4000 ) {  /* echo */
+			if( voice->echo & 1 )
+				punchium_s.echo_l[punchium_s.echo_ptr % (48000/6)] += (sample_l * 33) / 100;
+			else
+				punchium_s.echo_r[punchium_s.echo_ptr % (48000/6)] += (sample_r * 33) / 100;
+		}
+
+
+		if( voice->flags & 0x100 ) {  /* amplify */
+			l = (l * 125) / 100;
+			r = (r * 125) / 100;
+		}
+
 		voice->time++;
 
-        // Обновление позиции в сэмпле
-        int rate = _rates[voice->type >> 4];
-        voice->tick += 0x10000;
-        voice->tick -= (voice->flags & 0x8000) ? 0x800 : 0;
-        voice->tick -= (voice->flags & 0x2000) ? 0x8000 : 0;
+		voice->tick += 0x10000;
+		voice->tick -= (voice->flags & 0x8000) ? 0x800 : 0;  /* tiny pitch */
+		voice->tick -= (voice->flags & 0x2000) ? 0x8000 : 0;  /* huge pitch */
 
-        if (voice->tick >= rate) {
-            voice->tick -= rate;
-            voice->count++;
-            voice->size--;
 
-            if (voice->count >= depth) {
-                voice->ptr++;
-                voice->count = 0;
-            }
-        }
+		if( voice->tick >= rate ) {
+			voice->tick -= rate;
 
-        // Проверка на зацикливание
-        if (voice->size == 0 && voice->loop) {
-            uint8 *sfx = cart.rom + punchium_sfx_ptr;
-            voice->ptr = (*(uint16 *)(sfx + voice->num * 8) << 16) | (*(uint16 *)(sfx + voice->num * 8 + 2));
-            voice->size = (*(uint8 *)(sfx + voice->num * 8 + 4) << 16) | (*(uint16 *)(sfx + voice->num * 8 + 6));
-            voice->count = 0;
-        }
-    }
+			voice->count++;
+			voice->size--;
 
-    *out_l += l;
-    *out_r += r;
+			if( voice->count >= depth ) {
+				voice->ptr++;
+
+				voice->count = 0;
+			}
+		}
+next:
+		if( voice->size == 0 ) {
+			voice->count = 0;
+
+			if( voice->loop ) {
+				uint8 *sfx = punchium_sfx_ptr + cart.rom;
+
+				voice->ptr = (*(uint16 *)(sfx + voice->num*8) << 16) | (*(uint16 *)(sfx + voice->num*8 + 2));
+				voice->size = (*(uint8 *)(sfx + voice->num*8 + 4) << 16) | (*(uint16 *)(sfx + voice->num*8 + 6));
+			}
+		}
+	}
+
+	*out_l += l;
+	*out_r += r;
 }
 
 // Главный аудиомиксер: обрабатывает музыку, SFX, эффекты (эхо), применяет громкость, отправляет данные в blip_buffer.
@@ -903,8 +915,8 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 
 
 #if 0
-	snprintf(error_str, "LZ-RLE %X\n", src);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	snprintf(error_str, sizeof(error_str), "LZ-RLE %X\n", src);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -936,8 +948,8 @@ static void punchium_decoder_lz_rle(uint src, uint8 *dst)
 	}
 
 #if 0
-	snprintf(error_str, "STOP %X - %X\n", src, size);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	snprintf(error_str, sizeof(error_str), "STOP %X - %X\n", src, size);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -953,8 +965,8 @@ static void punchium_decoder_lzo(uint src, uint8 *dst)
 
 
 #if 0
-	snprintf(error_str, "LZO %X\n", src);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	snprintf(error_str, sizeof(error_str), "LZO %X\n", src);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1122,8 +1134,8 @@ copy_loop:
 
 
 #if 0
-	snprintf(error_str, "END %X - %X\n", src, size);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	snprintf(error_str, sizeof(error_str), "END %X - %X\n", src, size);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1143,9 +1155,8 @@ static void punchium_decoder_type(int src, uint8 *dst)
 
 	else {
 #if DEBUG_MODE
-		snprintf(error_str, "%X - Decoder_Type %X\n", src-1, type);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "punchium_decoder_init", 0);
+		snprintf(error_str, sizeof(error_str), "%X - Decoder_Type %X\n", src-1, type);
+		DEBUG_OUTPUT(error_str);
 #endif
 	}
 }
@@ -1154,11 +1165,11 @@ static void punchium_decoder_type(int src, uint8 *dst)
 static void punchium_decoder(int mode)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Decoder %02X -- %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Decoder %02X -- %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		mode, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1167,9 +1178,8 @@ static void punchium_decoder(int mode)
 
 #if DEBUG_MODE
 	if( mode != 2 && mode != 7 ) {
-		snprintf(error_str, "Mode %X", mode);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "Decoder_Init", 0);
+		snprintf(error_str, sizeof(error_str), "Mode %X", mode);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -1180,9 +1190,8 @@ static void punchium_decoder(int mode)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 3 ) {
-		snprintf(error_str, "Decoder %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), "Decoder %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1195,18 +1204,17 @@ static void punchium_decoder_copy(int arg)
 	int size = *(uint16 *)(punchium_s.ram + 0x1E14);
 
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Decoder_Copy %02X [%X] -- %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Decoder_Copy %02X [%X] -- %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, punchium_s.decoder_ptr,
 		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) ) {
-		snprintf(error_str, "punchium_decoder 1E10 = %X", *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0,error_str,"decoder",0);
+		snprintf(error_str, sizeof(error_str), "punchium_decoder 1E10 = %X", *(uint16 *)(punchium_s.ram + 0x1E10));
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -1215,9 +1223,8 @@ static void punchium_decoder_copy(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 3 ) {
-		snprintf(error_str, "Decoder_Copy %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), "Decoder_Copy %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1290,13 +1297,13 @@ static void punchium_sprite(int index)
 #if DEBUG_SPRITE
 	uint8 *ptr = punchium_s.ram + 0xF80 + index*16;
 
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite %02X - %04X %04X %04X %04X %04X %04X X=%04X Y=%04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sprite %02X - %04X %04X %04X %04X %04X %04X X=%04X Y=%04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		index,
 		*(uint16 *)(ptr+0), *(uint16 *)(ptr+2), *(uint16 *)(ptr+4), *(uint16 *)(ptr+6),
 		*(uint16 *)(ptr+8), *(uint16 *)(ptr+10), *(uint16 *)(ptr+12), *(uint16 *)(ptr+14) );
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1319,12 +1326,12 @@ reload:
 
 
 #if DEBUG_SPRITE
-	snprintf(error_str, "%X - %X %X %X - %X - %X %X\n",
+	snprintf(error_str, sizeof(error_str), "%X - %X %X %X - %X - %X %X\n",
 		((obj+1) & 0x7FFF)*4,
 		animPtr, anim, animPtr + anim*4,
 		framePtr,
 		spritePtr, animFlags);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1359,8 +1366,8 @@ reload:
 
 
 #if 0
-	snprintf(error_str, "%d - %X %X %X\n", count, src, vram, flags2);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	snprintf(error_str, sizeof(error_str), "%d - %X %X %X\n", count, src, vram, flags2);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1409,14 +1416,14 @@ reload:
 					*(uint16*) (punchium_s.ram + 0xB06 + spriteCount*8) = (spr_x - ((!flip_h) ? 0 : size_x*8)) & 0x1FF;
 
 #if DEBUG_SPRITE
-					snprintf(error_str, "%d / %X %X %X %X\n",
+					snprintf(error_str, sizeof(error_str), "%d / %X %X %X %X\n",
 						spriteCount,
 						*(uint16*) (punchium_s.ram + 0xB00 + (spriteCount-0)*8),
 						*(uint16*) (punchium_s.ram + 0xB02 + (spriteCount-0)*8),
 						*(uint16*) (punchium_s.ram + 0xB04 + (spriteCount-0)*8),
 						*(uint16*) (punchium_s.ram + 0xB06 + (spriteCount-0)*8)
 					);
-					log_cb(RETRO_LOG_ERROR, error_str);
+					DEBUG_OUTPUT(error_str);
 #endif
 				}
 				else {
@@ -1435,22 +1442,22 @@ reload:
 					*(uint16*) (punchium_s.exps_ram + 6 + (spriteCount-80)*8) = (spr_x - ((!flip_h) ? 0 : size_x*8)) & 0x1FF;
 
 #if DEBUG_SPRITE
-					snprintf(error_str, "%d / %X %X %X %X\n",
+					snprintf(error_str, sizeof(error_str), "%d / %X %X %X %X\n",
 						spriteCount,
 						*(uint16*) (punchium_s.ram + 0x1F20 + (spriteCount-80)*8),
 						*(uint16*) (punchium_s.ram + 0x1F22 + (spriteCount-80)*8),
 						*(uint16*) (punchium_s.ram + 0x1F24 + (spriteCount-80)*8),
 						*(uint16*) (punchium_s.ram + 0x1F26 + (spriteCount-80)*8)
 					);
-					log_cb(RETRO_LOG_ERROR, error_str);
+					DEBUG_OUTPUT(error_str);
 #endif
 				}
 
 				spriteCount++;
 
 #if DEBUG_SPRITE
-				snprintf(error_str, "%d %d / %d %d %X %X / %X %X %X\n", spriteCount, count, spr_x, spr_y, tileAttr, objAttr, src, vram, tile);
-				log_cb(RETRO_LOG_ERROR, error_str);
+				snprintf(error_str, sizeof(error_str), "%d %d / %d %d %X %X / %X %X %X\n", spriteCount, count, spr_x, spr_y, tileAttr, objAttr, src, vram, tile);
+				DEBUG_OUTPUT(error_str);
 #endif
 			}
 		}
@@ -1461,7 +1468,7 @@ reload:
 		static uint8 tile_ram[0x10000];
 		
 #if TILE_CACHE_ENABLE
-		punchium_decoder_type_cached(ptr, tile_ram);
+		tile_cache_decoder(ptr, tile_ram);
 #else
 		punchium_decoder_type(ptr, tile_ram);
 #endif
@@ -1495,20 +1502,19 @@ reload:
 static void punchium_sprite_init(int arg)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Init %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sprite_Init %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	memset(punchium_s.ram + 0x1F20, 0, 14*8);
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Sprite_Init %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sprite_Init %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1517,11 +1523,11 @@ static void punchium_sprite_init(int arg)
 static void punchium_sprite_start(int arg)
 {
 #if DEBUG_SPRITE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Start %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sprite_Start %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	int count = *(uint16*)(punchium_s.ram + 0x1F18);
@@ -1550,9 +1556,8 @@ static void punchium_sprite_start(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Sprite_Start %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sprite_Start %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1561,11 +1566,11 @@ static void punchium_sprite_start(int arg)
 static void punchium_sprite_stop(int arg)
 {
 #if DEBUG_SPRITE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Stop %02X -- %d sprites\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sprite_Stop %02X -- %d sprites\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16*)(punchium_s.ram + 0x1f18));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 
@@ -1591,9 +1596,8 @@ static void punchium_sprite_stop(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Sprite_Stop %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sprite_Stop %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1602,11 +1606,11 @@ static void punchium_sprite_stop(int arg)
 static void punchium_sprite_pause(int arg)
 {
 #if DEBUG_SPRITE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sprite_Pause %02X -- %d sprites\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sprite_Pause %02X -- %d sprites\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16*)(punchium_s.ram + 0x1f18));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	int count = *(uint16*)(punchium_s.ram + 0x1F18);
@@ -1616,9 +1620,8 @@ static void punchium_sprite_pause(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Sprite_Pause %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sprite_Pause %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1630,12 +1633,12 @@ static void punchium_scaler_init(int arg)
 	static uint8 temp[0x800];
 
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Scaler_Init %02X - %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Scaler_Init %02X - %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg,
 		*(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	int ptr = (*(uint16 *)(punchium_s.ram + 0x1E10) << 16) + *(uint16 *)(punchium_s.ram + 0x1E12);
@@ -1657,9 +1660,8 @@ static void punchium_scaler_init(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		snprintf(error_str, ">>  Scaler_Init %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Scaler_Init %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1677,11 +1679,11 @@ static void punchium_scaler(int arg)
 	int ptr_frac = 0;
 
 #if DEBUG_SPRITE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Scaler %02X --  %04X %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Scaler %02X --  %04X %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	for( col = 0; col < 128; col++ ) {
@@ -1713,9 +1715,8 @@ static void punchium_scaler(int arg)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 4 ) {
-		snprintf(error_str, ">>  Scaler %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Scaler %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1724,11 +1725,11 @@ static void punchium_scaler(int arg)
 static void punchium_sram_read(int bank)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sram_Read %02X -- %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sram_Read %02X -- %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		bank, *(uint16 *)(punchium_s.ram + 0x1E10));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	int offset = *(uint16 *)(punchium_s.ram + 0x1E10);
@@ -1738,9 +1739,8 @@ static void punchium_sram_read(int bank)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 1 ) {
-		snprintf(error_str, ">>  Sram_Read %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sram_Read %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1749,11 +1749,11 @@ static void punchium_sram_read(int bank)
 static void punchium_sram_write(int bank)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sram_Write %02X -- %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sram_Write %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		bank, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	/* *(uint16 *)(punchium_s.ram + 0x1E10) */
@@ -1764,15 +1764,13 @@ static void punchium_sram_write(int bank)
 
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0xBEEF ) {
-		snprintf(error_str, ">>  SRAM write 1E10 %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "sram write", 0);
+		snprintf(error_str, sizeof(error_str), ">>  SRAM write 1E10 %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if( punchium_cmd_count != 1 ) {
-		snprintf(error_str, ">>  Sram_Write %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sram_Write %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1781,20 +1779,19 @@ static void punchium_sram_write(int bank)
 static void punchium_mapper(int arg)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Mapper %02X -- %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Mapper %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	memcpy(punchium_s.ram + 0x8000, cart.rom + 0x8000, 0x8000);  /* troll */
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		snprintf(error_str, ">>  Mapper %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Mapper %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1803,11 +1800,11 @@ static void punchium_mapper(int arg)
 static void punchium_boot(int arg)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Boot %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Boot %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	punchium_music_ptr = (*(uint16*)(punchium_s.ram + 0x1E10) << 16) + *(uint16*)(punchium_s.ram + 0x1E12);
@@ -1831,26 +1828,24 @@ static void punchium_boot(int arg)
 static void punchium_EC(int arg)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM EC %02X = %02X %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM EC %02X = %02X %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		arg, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 #if DEBUG_MODE
 	if( *(uint16 *)(punchium_s.ram + 0x1E10) ) {
-		snprintf(error_str, ">>  EC %02X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ec", 0);
+		snprintf(error_str, sizeof(error_str), ">>  EC %02X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 2 ) {
-		snprintf(error_str, ">>  EC %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  EC %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1859,11 +1854,11 @@ static void punchium_EC(int arg)
 static void punchium_music(int track)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Music %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Music %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		track);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	track &= 0x7F;
@@ -1888,9 +1883,8 @@ static void punchium_music(int track)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Music %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -1901,11 +1895,11 @@ static void punchium_music(int track)
 static void punchium_music_volume(int level)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Volume %02X -- %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Music_Volume %02X -- %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		level, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	punchium_s.music_volume = level;
@@ -1918,21 +1912,18 @@ static void punchium_music_volume(int level)
 
 #if DEBUG_MODE
 	if(*(uint16 *)(punchium_s.ram + 0x1E10) != 0x80) {
-		snprintf(error_str, ">>  Music_Volume = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music_Volume = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if(*(uint16 *)(punchium_s.ram + 0x1E12) != 0x00 && *(uint16 *)(punchium_s.ram + 0x1E12) != 0x08) {
-		snprintf(error_str, ">>  Music_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if( punchium_cmd_count != 2 ) {
-		snprintf(error_str, ">>  Music_Volume %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music_Volume %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1941,11 +1932,11 @@ static void punchium_music_volume(int level)
 static void punchium_music_setting(int flag)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Setting %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Music_Setting %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flag);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	if( flag == 8 )
@@ -1956,17 +1947,15 @@ static void punchium_music_setting(int flag)
 
 #if DEBUG_MODE
 	else {
-		snprintf(error_str, ">>  Music_Setting = %X\n", flag);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music_Setting = %X\n", flag);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Music_Setting %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music_Setting %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -1975,11 +1964,11 @@ static void punchium_music_setting(int flag)
 static void punchium_music_special(int flag)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Music_Special %02X = %04X %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Music_Special %02X = %04X %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flag, *(uint16 *)(punchium_s.ram + 0x1E10), *(uint16 *)(punchium_s.ram + 0x1E12), *(uint16 *)(punchium_s.ram + 0x1E14), *(uint16 *)(punchium_s.ram + 0x1E16));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	if( flag == 1 ) {
@@ -1988,21 +1977,18 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x40 ) {
-			snprintf(error_str, ">>  Music_Special_01 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_01 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( *(uint16 *)(punchium_s.ram + 0x1E12) != 0x08 ) {
-			snprintf(error_str, ">>  Music_Special_01-2 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_01-2 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( punchium_cmd_count != 2 ) {
-			snprintf(error_str, ">>  Music_Special-01 %d count\n", punchium_cmd_count);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special-01 %d count\n", punchium_cmd_count);
+			DEBUG_OUTPUT(error_str);
 		}
 #endif
 	}
@@ -2012,15 +1998,13 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 4 && *(uint16 *)(punchium_s.ram + 0x1E10) != 0 ) {
-			snprintf(error_str, ">>  Music_Special_02 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_02 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			snprintf(error_str, ">>  Music_Special-02 %d count\n", punchium_cmd_count);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special-02 %d count\n", punchium_cmd_count);
+			DEBUG_OUTPUT(error_str);
 		}
 #endif
 	}
@@ -2030,15 +2014,13 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x80 && *(uint16 *)(punchium_s.ram + 0x1E10) != 0x81 ) {
-			snprintf(error_str, ">>  Music_Special_04 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_04 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			snprintf(error_str, ">>  Music_Special-04 %d count\n", punchium_cmd_count);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special-04 %d count\n", punchium_cmd_count);
+			DEBUG_OUTPUT(error_str);
 		}
 #endif
 	}
@@ -2050,15 +2032,13 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 1 ) {
-			snprintf(error_str, ">>  Music_Special_06 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_06 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( punchium_cmd_count != 3 ) {
-			snprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special-06 %d count\n", punchium_cmd_count);
+			DEBUG_OUTPUT(error_str);
 		}
 #endif
 	}
@@ -2068,24 +2048,21 @@ static void punchium_music_special(int flag)
 
 #if DEBUG_MODE
 		if( *(uint16 *)(punchium_s.ram + 0x1E10) != 0x6C && *(uint16 *)(punchium_s.ram + 0x1E10) != 0xA0 ) {
-			snprintf(error_str, ">>  Music_Special_07 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special_07 %X count\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+			DEBUG_OUTPUT(error_str);
 		}
 
 		if( punchium_cmd_count != 1 ) {
-			snprintf(error_str, ">>  Music_Special-06 %d count\n", punchium_cmd_count);
-			log_cb(RETRO_LOG_ERROR, error_str);
-			//MessageBoxA(0, error_str, "count", 0);
+			snprintf(error_str, sizeof(error_str), ">>  Music_Special-06 %d count\n", punchium_cmd_count);
+			DEBUG_OUTPUT(error_str);
 		}
 #endif
 	}
 
 #if DEBUG_MODE
 	else {
-		snprintf(error_str, ">>  Music special = %X\n", flag);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Music special = %X\n", flag);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -2094,11 +2071,11 @@ static void punchium_music_special(int flag)
 static void punchium_audio_setting(int flags)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Audio_Settings %02X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Audio_Settings %02X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		flags);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	punchium_s.audio_flags = flags;
@@ -2108,9 +2085,8 @@ static void punchium_audio_setting(int flags)
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 0 ) {
-		snprintf(error_str, ">>  Audio_Settings %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Audio_Settings %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -2119,11 +2095,11 @@ static void punchium_audio_setting(int flags)
 static void punchium_sfx_volume(int level)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X] DM Sfx_Volume %02X -- %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM Sfx_Volume %02X -- %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 		level, *(uint16 *)(punchium_s.ram + 0x1E10));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	punchium_s.sfx_volume = level;
@@ -2133,24 +2109,21 @@ static void punchium_sfx_volume(int level)
 
 #if DEBUG_MODE
 	if(*(uint16 *)(punchium_s.ram + 0x1E10) != 0x80) {
-		snprintf(error_str, ">>  Sfx_Volume-1 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sfx_Volume-1 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E10));
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if(*(uint16 *)(punchium_s.ram + 0x1E12) != 0x00 && punchium_cmd_count == 2) {
-		snprintf(error_str, ">>  Sfx_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "ooo", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sfx_Volume-2 = %X\n", *(uint16 *)(punchium_s.ram + 0x1E12));
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
 
 #if DEBUG_MODE
 	if( punchium_cmd_count != 1 && punchium_cmd_count != 2 ) {
-		snprintf(error_str, ">>  Sfx_Volume %d count\n", punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
-		//MessageBoxA(0, error_str, "count", 0);
+		snprintf(error_str, sizeof(error_str), ">>  Sfx_Volume %d count\n", punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -2161,27 +2134,27 @@ void punchium_cmd_print_debug(int cmd, int data, int argscnt, int v_counter, int
 #if DEBUG_MODE
 	switch (argscnt) {
 		case 0:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data);
 			break;
 		case 1:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data,
 				*(uint16_t *)(punchium_s.ram + 0x1E10));
 			break;
 		case 2:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data,
 				*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12));
 			break;
 		case 4:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data,
@@ -2189,7 +2162,7 @@ void punchium_cmd_print_debug(int cmd, int data, int argscnt, int v_counter, int
 				*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
 			break;
 		case 5:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data,
@@ -2198,7 +2171,7 @@ void punchium_cmd_print_debug(int cmd, int data, int argscnt, int v_counter, int
 				*(uint16_t *)(punchium_s.ram + 0x1E18));
 			break;
 		case 9:
-			snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X ..\n",
+			snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X %04X ..\n",
 				v_counter,
 				(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 				cmd, data,
@@ -2208,29 +2181,29 @@ void punchium_cmd_print_debug(int cmd, int data, int argscnt, int v_counter, int
 			break;
 		default:
 			if (argscnt == 4) {
-				snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
+				snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X -- %04X %04X %04X %04X\n",
 					v_counter,
 					(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 					cmd, data,
 					*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
 					*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
 			} else {
-				snprintf(error_str, "[%d] [%04X:%04X] DM %02X %02X ## %04X %04X %04X %04X\n",
+				snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] DM %02X %02X ## %04X %04X %04X %04X\n",
 					v_counter,
 					(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff,
 					cmd, data,
 					*(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
 					*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
 			}
-			snprintf(error_str, "DM %02X %02X\n", cmd, data);
+			snprintf(error_str, sizeof(error_str), "DM %02X %02X\n", cmd, data);
 			break;
 	}
 	
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 	
 	if (argscnt >= 0 && argscnt <= 9 && punchium_cmd_count != argscnt) {
-		snprintf(error_str, "%X %d count\n", cmd, punchium_cmd_count);
-		log_cb(RETRO_LOG_ERROR, error_str);
+		snprintf(error_str, sizeof(error_str), "%X %d count\n", cmd, punchium_cmd_count);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 }
@@ -2246,12 +2219,12 @@ void punchium_sfx_play(int data, int v_counter, int retaddr)
 	uint8_t *sfx = punchium_sfx_ptr + cart.rom;
 
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Play %02X -- %04X %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Play %02X -- %04X %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
 		data, *(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
 		*(uint16_t *)(punchium_s.ram + 0x1E14), *(uint16_t *)(punchium_s.ram + 0x1E16));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	chan = *(uint16_t *)(punchium_s.ram + 0x1E10);
@@ -2261,12 +2234,12 @@ void punchium_sfx_play(int data, int v_counter, int retaddr)
 
 #if DEBUG_MODE
 	if (flags & 0x100) {
-		snprintf(error_str, "Sfx flags %X\n", flags);
-		log_cb(RETRO_LOG_ERROR, error_str);
+		snprintf(error_str, sizeof(error_str), "Sfx flags %X\n", flags);
+		DEBUG_OUTPUT(error_str);
 	} else if (!(flags & 0x8000) && !(flags & 0x4000) && !(flags & 0x2000) && 
 			   !(flags & 0x800) && !(flags & 0x400) && flags != 0) {
-		snprintf(error_str, "Sfx flags %X\n", flags);
-		log_cb(RETRO_LOG_ERROR, error_str);
+		snprintf(error_str, sizeof(error_str), "Sfx flags %X\n", flags);
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if (chan > 0x80) {
@@ -2279,11 +2252,11 @@ void punchium_sfx_play(int data, int v_counter, int retaddr)
 	type = *(uint8_t *)(sfx + data*8 + 5);
 
 #if DEBUG_MODE
-	snprintf(error_str, "%X %X | %X %X %X | %X %X %X\n",
+	snprintf(error_str, sizeof(error_str), "%X %X | %X %X %X | %X %X %X\n",
 		punchium_sfx_ptr + data*8, punchium_sfx_ptr + ptr,
 		ptr, size, type,
 		rates[type >> 4], type & 0x03, type & 0x0C);
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	// Поиск свободного канала
@@ -2327,12 +2300,12 @@ void punchium_sfx_play(int data, int v_counter, int retaddr)
 void punchium_sfx_loop(int data, int v_counter, int retaddr)
 {
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Loop %02X -- %04X %04X %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Loop %02X -- %04X %04X %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
 		data, *(uint16_t *)(punchium_s.ram + 0x1E10), *(uint16_t *)(punchium_s.ram + 0x1E12), 
 		*(uint16_t *)(punchium_s.ram + 0x1E14));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	for (int lcv = 0; lcv < 8; lcv++, data >>= 1) {
@@ -2352,11 +2325,11 @@ static void punchium_sfx_off(int data, int v_counter, int retaddr, int lcv)
 	int flags;
 
 #if DEBUG_MODE
-	snprintf(error_str, "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Off %02X -- %04X\n",
+	snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X <== %04X:%04X] DM Sfx_Off %02X -- %04X\n",
 		v_counter,
 		(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, (retaddr>>16)&0xffff, retaddr&0xffff,
 		data, *(uint16_t *)(punchium_s.ram + 0x1E10));
-	log_cb(RETRO_LOG_ERROR, error_str);
+	DEBUG_OUTPUT(error_str);
 #endif
 
 	flags = *(uint16_t *)(punchium_s.ram + 0x1E10);
@@ -2498,21 +2471,18 @@ static int punchium_addr_test(uint32 address, int mode)
 
 #if 0
 	if( address >= 0x1290 && address < 0x1400 ) {
-		//MessageBoxA(0, "address", "me", 0);
 		return 0;
 	}
 #endif
 
 #if 0
 	if( address >= 0x1B40 && address < 0x1b90 ) {
-		//MessageBoxA(0, "address 2", "me", 0);
 		return 1;
 	}
 #endif
 
 #if 0
 	if( address >= 0xd80 && address < 0xf80 ) {
-		//MessageBoxA(0, "address 3", "me", 0);
 		return 1;
 	}
 #endif
@@ -2553,10 +2523,10 @@ static inline unsigned int FASTCALL punchium_r8(uint32 address)
 
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 0) ) {
-		snprintf(error_str, "[%04X:%04X] R8 %04X = %04X\n",
+		snprintf(error_str, sizeof(error_str), "[%04X:%04X] R8 %04X = %04X\n",
 			(m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
-		log_cb(RETRO_LOG_ERROR, error_str);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -2580,8 +2550,8 @@ static inline unsigned int FASTCALL punchium_r16(uint32 address)
 
 	if( (address == 0xC000) && (punchium_s.decoder_size > 0) ) {
 #if DEBUG_MODE
-		snprintf(error_str, "[%d] Decoder %X %X @ C000\n", v_counter, punchium_s.decoder_ptr, punchium_s.decoder_size);
-		log_cb(RETRO_LOG_ERROR, error_str);
+		snprintf(error_str, sizeof(error_str), "[%d] Decoder %X %X @ C000\n", v_counter, punchium_s.decoder_ptr, punchium_s.decoder_size);
+		DEBUG_OUTPUT(error_str);
 #endif
 
 		int max, size;
@@ -2629,10 +2599,10 @@ static inline unsigned int FASTCALL punchium_r16(uint32 address)
 
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 0) ) {
-		snprintf(error_str, "[%d] [%04X:%04X] R16 %04X = %04X\n",
+		snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] R16 %04X = %04X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
-		log_cb(RETRO_LOG_ERROR, error_str);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -2644,10 +2614,10 @@ static inline void FASTCALL punchium_w8(uint32 address, uint32 data)
 {
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 1) ) {
-		snprintf(error_str, "[%d] [%04X:%04X] W8 %04X = %02X\n",
+		snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] W8 %04X = %02X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
-		log_cb(RETRO_LOG_ERROR, error_str);
+		DEBUG_OUTPUT(error_str);
 	}
 #endif
 
@@ -2659,10 +2629,10 @@ static inline void FASTCALL punchium_w16(uint32 address, uint32 data)
 {
 #if DEBUG_MODE
 	if( punchium_addr_test(address, 1) ) {
-		snprintf(error_str, "[%d] [%04X:%04X] W16 %04X = %04X\n",
+		snprintf(error_str, sizeof(error_str), "[%d] [%04X:%04X] W16 %04X = %04X\n",
 			v_counter, (m68k.prev_pc>>16)&0xffff, m68k.prev_pc&0xffff, address, data);
 
-		log_cb(RETRO_LOG_ERROR, error_str);
+		DEBUG_OUTPUT(error_str);
 	}
 
 	if( address >= 0x1E10 && address <= 0x1E30 ) punchium_cmd_count++;
