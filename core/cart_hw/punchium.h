@@ -2554,7 +2554,7 @@ static inline unsigned int FASTCALL punchium_r16(uint32 address)
 		DEBUG_OUTPUT(error_str);
 #endif
 
-		int max, size;
+		int max = 0, size = 0;
 
 		if( punchium_s.decoder_mode == 2 )
 			max = 0x4000;

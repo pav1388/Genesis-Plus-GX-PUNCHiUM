@@ -1311,6 +1311,8 @@ static bool update_geometry(void)
       environ_cb(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &info);
    else
       environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info);
+  
+  return true;
 }
 
 static bool update_viewport(void)

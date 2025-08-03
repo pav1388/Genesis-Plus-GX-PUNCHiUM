@@ -986,7 +986,7 @@ static void OPN2_ChOutput(ym3438_t *chip)
 #if 1
 /* https://jsgroth.dev/blog/posts/sega-cd-pcm-interpolation/ */
 	{
-		static Bit16s ym[6][6] = {0,0,0,0,0,0};  /* hermite 6p */
+		static Bit16s ym[6][6] = {0};  /* hermite 6p */
 		float x = 0;  /* fractional pitch */
 		float c0,c1,c2,c3;
 		int ch = 0; //chip->channel;
