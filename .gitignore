@@ -16,3 +16,6 @@ sdl/build_sdl2
 
 *.o
 *.a
+*.d
+*.sh
+genesis_plus_gx_libretro.dll

@@ -662,6 +662,7 @@ clean-objs:
 clean:
 	rm -f $(OBJECTS)
 	rm -f $(TARGET)
+	rm -f $(SOURCES_C:.c=.d) $(SOURCES_CXX:.cpp=.d)
 
 .PHONY: clean clean-objs
 endif
