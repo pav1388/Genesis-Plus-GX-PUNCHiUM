@@ -2919,6 +2919,7 @@ void retro_set_environment(retro_environment_t cb)
    };
 
    environ_cb = cb;
+   rom_glitcher_cbs.environ_cb = cb;
 
    libretro_supports_option_categories = false;
    libretro_set_core_options(environ_cb,
@@ -2952,8 +2953,8 @@ void retro_set_environment(retro_environment_t cb)
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void)cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_cb = cb; }
-void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
-void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
+void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; rom_glitcher_cbs.input_poll_cb = cb; }
+void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; rom_glitcher_cbs.input_state_cb = cb; }
 
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -3606,9 +3607,15 @@ void retro_init(void)
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
-      log_cb = log.log;
+   {
+       log_cb = log.log;
+       rom_glitcher_cbs.log_cb = log.log;
+   }
    else
-      log_cb = NULL;
+   {
+       log_cb = NULL;
+       rom_glitcher_cbs.log_cb = NULL;
+   }
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
