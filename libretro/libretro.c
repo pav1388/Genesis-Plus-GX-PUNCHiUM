@@ -1536,6 +1536,53 @@ static void check_variables(bool first_run)
     }
   }
 
+var.key = "rom_glitcher_menu_button";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+
+  if (var.value)
+  {
+      if (!strcmp(var.value, "disabled"))
+          rom_glitcher_menu_button = RG_DISABLED_KEY;
+      else if (!strcmp(var.value, "SELECT"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+      else if (!strcmp(var.value, "START"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_START;
+      else if (!strcmp(var.value, "A"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_A;
+      else if (!strcmp(var.value, "B"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_B;
+      else if (!strcmp(var.value, "Y"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_Y;
+      else if (!strcmp(var.value, "X"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_X; 
+      else if (!strcmp(var.value, "UP"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_UP;
+      else if (!strcmp(var.value, "DOWN"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_DOWN;
+      else if (!strcmp(var.value, "LEFT"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_LEFT;
+      else if (!strcmp(var.value, "RIGHT"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_RIGHT;
+      else if (!strcmp(var.value, "L"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L;
+      else if (!strcmp(var.value, "R"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R;
+      else if (!strcmp(var.value, "L2"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L2;
+      else if (!strcmp(var.value, "R2"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R2;
+      else if (!strcmp(var.value, "L3"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L3;
+      else if (!strcmp(var.value, "R3"))
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R3;
+      else
+          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+  }
+  else
+  {
+      rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+  }
+
   var.key = "genesis_plus_gx_force_dtack";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
   {
