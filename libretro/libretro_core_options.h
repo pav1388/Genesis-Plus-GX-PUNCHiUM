@@ -95,7 +95,7 @@ struct retro_core_option_v2_category option_cats_us[] = {
 
 struct retro_core_option_v2_definition option_defs_us[] = {
    {
-      "rom_glitcher_menu_button",
+      "rg_menu_button",
       "ROM Glitcher (Menu Button)",
       NULL,
       "Button to show menu of ROM Glitcher",

@@ -1,0 +1,68 @@
+// rom_glitcher.h
+
+#ifndef _ROM_GLITCHER_H_
+#define _ROM_GLITCHER_H_
+
+#define RG_DISABLED_KEY 241 // random number that is not gamepad button
+
+#include "shared.h"
+
+
+
+//extern rom_glitcher_t rg_main;
+
+typedef struct {
+    retro_log_printf_t log_cb;
+    retro_environment_t environ_cb;
+    retro_input_poll_t input_poll_cb;
+    retro_input_state_t input_state_cb;
+} rom_glitcher_callbacks_t;
+
+extern rom_glitcher_callbacks_t rg_cbs;
+
+extern const struct retro_game_info* last_game; // data to reload current game
+extern uint8_t rg_menu_button; // menu call button
+
+static const char* get_label_activate_prev_glitches(void);
+static const char* get_label_after_step(void);
+static const char* get_label_step_back(void);
+//static void menu_item_debug_test(void);
+static void menu_item_open_settings_menu(void);
+static void menu_item_0_activate_glitcher(void);
+static void menu_item_1_bug_not_understand(void);
+static void menu_item_2_glitch_not_found(void);
+static void menu_item_3_glitch_found(void);
+static void menu_item_4_step_back(void);
+static void menu_item_after_step(void);
+static void menu_item_activate_prev_glitches(void);
+static void menu_hide(void);
+static void menu_show(void);
+
+static void apply_glitches(void);
+static void create_search_backup(void);
+static void restore_instructions(void);
+static void shuffle_instructions(void);
+static void remove_current_range(void);
+static void keep_only_current_range(void);
+static void show_notification(const char* s, uint8_t context);
+static void game_reset(void);
+static void game_save_state_to_ram(void);
+static void game_load_state_from_ram(void);
+static bool game_save_state_to_file(const char* path);
+static bool game_load_state_from_file(const char* path);
+static uint32_t xorshift(uint32_t* state);
+static uint16_t get_rom_checksum(uint8* rom, int length);
+static uint32_t get_checksum_for_file(const uint8_t* data, size_t size);
+static uint32_t ram_to_rom_offset(uint32_t address);
+static void rg_reset(void);
+
+void rg_init(uint8_t* rom_data, uint32_t size);
+void rg_deinit(void);
+void rg_input_processing(void);
+bool rg_get_menu_visible(void);
+void rg_set_rom_in_mdx(bool value);
+void rg_set_rom_is_byte_swapped(bool value);
+void rg_set_rom_has_header(bool value);
+void rg_set_rom_was_interleaved(bool value);
+
+#endif

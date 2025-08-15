@@ -36,6 +36,7 @@
 #include "areplay.h"
 #include "svp.h"
 #include "state.h"
+#include "rom_glitcher.h"
 
 #endif /* _SHARED_H_ */
 

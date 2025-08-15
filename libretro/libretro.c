@@ -1536,51 +1536,51 @@ static void check_variables(bool first_run)
     }
   }
 
-var.key = "rom_glitcher_menu_button";
+var.key = "rg_menu_button";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
 
   if (var.value)
   {
       if (!strcmp(var.value, "disabled"))
-          rom_glitcher_menu_button = RG_DISABLED_KEY;
+          rg_menu_button = RG_DISABLED_KEY;
       else if (!strcmp(var.value, "SELECT"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
       else if (!strcmp(var.value, "START"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_START;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_START;
       else if (!strcmp(var.value, "A"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_A;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_A;
       else if (!strcmp(var.value, "B"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_B;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_B;
       else if (!strcmp(var.value, "Y"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_Y;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_Y;
       else if (!strcmp(var.value, "X"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_X; 
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_X; 
       else if (!strcmp(var.value, "UP"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_UP;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_UP;
       else if (!strcmp(var.value, "DOWN"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_DOWN;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_DOWN;
       else if (!strcmp(var.value, "LEFT"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_LEFT;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_LEFT;
       else if (!strcmp(var.value, "RIGHT"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_RIGHT;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_RIGHT;
       else if (!strcmp(var.value, "L"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L;
       else if (!strcmp(var.value, "R"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R;
       else if (!strcmp(var.value, "L2"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L2;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L2;
       else if (!strcmp(var.value, "R2"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R2;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R2;
       else if (!strcmp(var.value, "L3"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_L3;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L3;
       else if (!strcmp(var.value, "R3"))
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_R3;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R3;
       else
-          rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
   }
   else
   {
-      rom_glitcher_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+      rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
   }
 
   var.key = "genesis_plus_gx_force_dtack";
@@ -2919,7 +2919,7 @@ void retro_set_environment(retro_environment_t cb)
    };
 
    environ_cb = cb;
-   rom_glitcher_cbs.environ_cb = cb;
+   rg_cbs.environ_cb = cb;
 
    libretro_supports_option_categories = false;
    libretro_set_core_options(environ_cb,
@@ -2953,8 +2953,8 @@ void retro_set_environment(retro_environment_t cb)
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void)cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_cb = cb; }
-void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; rom_glitcher_cbs.input_poll_cb = cb; }
-void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; rom_glitcher_cbs.input_state_cb = cb; }
+void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; rg_cbs.input_poll_cb = cb; }
+void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; rg_cbs.input_state_cb = cb; }
 
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -3216,8 +3216,11 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 	apply_cheats();
 }
 
+const struct retro_game_info* last_game;
+
 bool retro_load_game(const struct retro_game_info *info)
 {
+   last_game = info;
    int i;
    char *dir       = NULL;
 #if defined(_WIN32)
@@ -3609,12 +3612,12 @@ void retro_init(void)
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
    {
        log_cb = log.log;
-       rom_glitcher_cbs.log_cb = log.log;
+       rg_cbs.log_cb = log.log;
    }
    else
    {
        log_cb = NULL;
-       rom_glitcher_cbs.log_cb = NULL;
+       rg_cbs.log_cb = NULL;
    }
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
@@ -3637,6 +3640,7 @@ void retro_init(void)
 
 void retro_deinit(void)
 {
+   rg_deinit();
    libretro_supports_option_categories = false;
    libretro_supports_bitmasks          = false;
 
@@ -3655,6 +3659,93 @@ void retro_reset(void)
 
 void retro_run(void) 
 {
+    // ROM Glitcher
+    if (rg_menu_button != RG_DISABLED_KEY)
+    {
+        static void* pause_frame = NULL;
+        static int pause_frame_width = 0;
+        static int pause_frame_height = 0;
+
+        rg_input_processing(); // poll gamepad button presses and process input
+
+        if (rg_get_menu_visible()) // pause emulation while menu is active
+        {
+            if (bitmap.data && (!pause_frame || vwidth != pause_frame_width || vheight != pause_frame_height))
+            {
+                //darkening last frame of game
+                if (pause_frame) {
+                    free(pause_frame);
+                    pause_frame = NULL;
+                }
+
+                const int pixel_size = (bitmap.pitch / bitmap.width) > 2 ? 4 : 2;
+                pause_frame = malloc(vwidth * vheight * pixel_size);
+                pause_frame_width = vwidth;
+                pause_frame_height = vheight;
+
+                if (!pause_frame)
+                {
+                    video_cb(bitmap.data, vwidth, vheight, bitmap.pitch);
+                    return;
+                }
+
+                // RGB565 (16 bit)
+                if (pixel_size == 2)
+                {
+                    const uint16_t* src_frame = (const uint16_t*)bitmap.data;
+                    uint16_t* dst_frame = (uint16_t*)pause_frame;
+
+                    for (int y = 0; y < vheight; y++)
+                    {
+                        for (int x = 0; x < vwidth; x++)
+                        {
+                            int src_idx = y * (bitmap.pitch / 2) + x;
+                            int dst_idx = y * vwidth + x;
+                            uint16_t pixel = src_frame[src_idx];
+                            uint16_t r = (pixel >> 11) & 0x1F;
+                            uint16_t g = (pixel >> 5) & 0x3F;
+                            uint16_t b = pixel & 0x1F;
+                            dst_frame[dst_idx] = (r >> 1) << 11 | (g >> 1) << 5 | (b >> 1);
+                        }
+                    }
+                }
+                // RGBA8888 (32 bit)
+                else
+                {
+                    const uint32_t* src_frame = (const uint32_t*)bitmap.data;
+                    uint32_t* dst_frame = (uint32_t*)pause_frame;
+
+                    for (int y = 0; y < vheight; y++)
+                    {
+                        for (int x = 0; x < vwidth; x++)
+                        {
+                            int src_idx = y * (bitmap.pitch / 4) + x;
+                            int dst_idx = y * vwidth + x;
+                            uint32_t pixel = src_frame[src_idx];
+                            uint32_t r = (pixel >> 16) & 0xFF;
+                            uint32_t g = (pixel >> 8) & 0xFF;
+                            uint32_t b = pixel & 0xFF;
+                            dst_frame[dst_idx] = (pixel & 0xFF000000) | (r >> 1) << 16 | (g >> 1) << 8 | (b >> 1);
+                        }
+                    }
+                }
+            }
+
+            video_cb(pause_frame ? pause_frame : bitmap.data, vwidth, vheight, vwidth * (bitmap.pitch / bitmap.width));
+            return;
+        }
+        else
+        {
+            if (pause_frame)
+            {
+                free(pause_frame);
+                pause_frame = NULL;
+                pause_frame_width = 0;
+                pause_frame_height = 0;
+            }
+        }
+    }
+
    int do_skip = 0;
    bool updated = false;
    int vwoffset = 0;
