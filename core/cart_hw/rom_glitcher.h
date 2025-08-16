@@ -3,13 +3,9 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_DISABLED_KEY 241 // random number that is not gamepad button
+#define RG_DISABLED_KEY 128 // random number that is not gamepad button
 
 #include "shared.h"
-
-
-
-//extern rom_glitcher_t rg_main;
 
 typedef struct {
     retro_log_printf_t log_cb;
@@ -20,21 +16,21 @@ typedef struct {
 
 extern rom_glitcher_callbacks_t rg_cbs;
 
-extern const struct retro_game_info* last_game; // data to reload current game
+extern const struct retro_game_info* rg_last_game; // data to reload current game
 extern uint8_t rg_menu_button; // menu call button
 
-static const char* get_label_activate_prev_glitches(void);
+static const char* get_label_list_of_found_glitches(void);
 static const char* get_label_after_step(void);
 static const char* get_label_step_back(void);
-//static void menu_item_debug_test(void);
-static void menu_item_open_settings_menu(void);
-static void menu_item_0_activate_glitcher(void);
+static void menu_item_activate_selected_glitch(void);
+static void menu_item_open_options(void);
+static void menu_item_0_launch_glitcher(void);
 static void menu_item_1_bug_not_understand(void);
 static void menu_item_2_glitch_not_found(void);
 static void menu_item_3_glitch_found(void);
 static void menu_item_4_step_back(void);
 static void menu_item_after_step(void);
-static void menu_item_activate_prev_glitches(void);
+static void menu_item_open_list_of_found_glitches(void);
 static void menu_hide(void);
 static void menu_show(void);
 
@@ -59,10 +55,10 @@ static void rg_reset(void);
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
 void rg_input_processing(void);
-bool rg_get_menu_visible(void);
 void rg_set_rom_in_mdx(bool value);
 void rg_set_rom_is_byte_swapped(bool value);
 void rg_set_rom_has_header(bool value);
 void rg_set_rom_was_interleaved(bool value);
+bool rg_get_menu_visible(void);
 
 #endif

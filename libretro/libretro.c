@@ -3216,11 +3216,11 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 	apply_cheats();
 }
 
-const struct retro_game_info* last_game;
+const struct retro_game_info* rg_last_game;
 
 bool retro_load_game(const struct retro_game_info *info)
 {
-   last_game = info;
+   rg_last_game = info;
    int i;
    char *dir       = NULL;
 #if defined(_WIN32)
@@ -3640,7 +3640,9 @@ void retro_init(void)
 
 void retro_deinit(void)
 {
-   rg_deinit();
+    if (rg_menu_button != RG_DISABLED_KEY)
+        rg_deinit();
+
    libretro_supports_option_categories = false;
    libretro_supports_bitmasks          = false;
 
