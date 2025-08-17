@@ -1,3 +1,6 @@
+# Genesis Plus GX с ROM Glitcher:Inverter BEQ(0x67)<->BNE(0x66)
+https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
+----
 Genesis Plus GX is an open-source Sega 8/16 bit emulator focused on accuracy and portability. Initially ported and developped on Gamecube / Wii consoles through [libogc / devkitPPC](http://sourceforge.net/projects/devkitpro/), this emulator is now available on many other platforms through various frontends such as:
 
 * [Retroarch (libretro)](http://www.libretro.com)
