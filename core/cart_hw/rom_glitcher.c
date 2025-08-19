@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.0.7"
+#define RG_VERSION "Launch Glitcher v0.0.8"
 //#define RG_STATE_SIGNATURE "RGI"
 //#define RG_STATE_VERSION 1
 #define RG_LOAD_STATE 0
@@ -14,11 +14,9 @@
 #define PATH_MAX 512
 
 #include "rom_glitcher.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 
 typedef struct {
     uint32_t address;
@@ -625,7 +623,7 @@ static void menu_show(void) {
     if (!menu_visible || !menu.current || !rg_cbs.environ_cb) 
         return;
 
-    char menu_text[128] = {0}; // <= 128 !
+    char menu_text[128] = {'\n'}; // <= 128 !
 
     for (int i = 0; i < menu.current->item_count; i++) {
         const char* label = menu.current->items[i].get_label ? menu.current->items[i].get_label() : menu.current->items[i].label;
@@ -1185,7 +1183,7 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
 
     // проверка на дубликат
     char search[64];
-    snprintf(search, sizeof(search), "address = \"%u\"", real_address);
+    snprintf(search, sizeof(search), "code = \"%06X:%02X\"", real_address, mod_value);
     if (strstr(file_content, search)) {
         free(file_content);
         return 2; // уже есть такой глитч в файле
@@ -1206,7 +1204,7 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
     char new_entries[512];
     char desc[64];
     snprintf(desc, sizeof(desc),
-        "Glitch #%u (0x%02X->0x%02X)", cheats_count, initial_value, mod_value);
+        "Glitch #%u (0x%02X->0x%02X) steps %u", cheats_count, initial_value, mod_value, rg_main.step_count);
 
     snprintf(new_entries, sizeof(new_entries),
         "cheat%d_desc = \"%s\"\n"
@@ -1262,7 +1260,7 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
     //if (len > 128)
         //path_to_show = cheats_path + (len - 128);
 
-    char tmp[164];
+    char tmp[128];
     //snprintf(tmp, sizeof(tmp), "Glitch saved to \"%s\"", path_to_show);
     snprintf(tmp, sizeof(tmp), "Glitch saved to \"%s\"", cheats_path);
     show_notification(tmp, RG_MSG_INFO);
@@ -1305,7 +1303,7 @@ static void show_notification(const char* s, uint8_t context) {
         .level = level,                          // уровень сообщения (иконка сообщения)
         .target = RETRO_MESSAGE_TARGET_OSD,      // только на экран
         .type = RETRO_MESSAGE_TYPE_NOTIFICATION, // тип
-        .progress = -1                     // прогресс бар
+        .progress = -1                     		 // прогресс бар
     };
 
     rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
