@@ -1,9 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.0.8"
-//#define RG_STATE_SIGNATURE "RGI"
-//#define RG_STATE_VERSION 1
+#define RG_VERSION "Launch Glitcher v0.0.9"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -12,6 +10,8 @@
 #define RG_BACKUP_SLOTS_MAX 9 // любое количество
 #define RG_GLITCH_SLOTS_MAX 7 // <= 7 !
 #define PATH_MAX 512
+//#define RG_STATE_SIGNATURE "RGI"
+//#define RG_STATE_VERSION 1
 
 #include "rom_glitcher.h"
 #include <stdlib.h>
@@ -799,7 +799,7 @@ static void apply_glitches(void) {
 }
 
 // Инициализация глитчера (поиск всех BEQ(0x67)/BNE(0x66) с проверками)
-void rg_init(uint8_t* rom_data, uint32_t size) {
+void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     if (rg_main.init_done) {
         apply_glitches();
         return;
@@ -837,13 +837,13 @@ void rg_init(uint8_t* rom_data, uint32_t size) {
     rg_main.glitches = malloc(rg_main.capacity * sizeof(rom_glitch_t));
 
     uint32_t trim = rom_has_header ? 0 : 0x200;
-    if (size <= trim) {
+    if (rom_size <= trim) {
         show_notification("ROM too small", RG_MSG_ERROR);
         return;
     }
 
     // Читаем нормализованный ROM
-    for (uint32_t byte_addr = trim; byte_addr + 1 < size; byte_addr += 2) {
+    for (uint32_t byte_addr = trim; byte_addr + 1 < rom_size; byte_addr += 2) {
         uint8_t high_byte = 0;
         uint8_t low_byte = 0;
         int32_t target = 0;
@@ -859,15 +859,18 @@ void rg_init(uint8_t* rom_data, uint32_t size) {
         //if ((low_byte & 1) != 0) continue;
 
         // Дополнительная проверка целевого адреса назначения инструкции
-        if ((low_byte & 1) == 0) {
-            // Чётное смещение - короткая форма инструкции
+        if (low_byte != 0 && (low_byte & 1) == 0) {
+            // Короткое смещение
             int8_t disp8 = (int8_t)low_byte;
             uint32_t pc_next = byte_addr + 2;
             target = (int32_t)pc_next + (int32_t)disp8;
         }
         else {
-            // Нечётное смещение - расширенная форма
-            if (byte_addr + 3 >= size)
+            // Длинное смещение
+            if (low_byte != 0)
+                continue;
+
+            if (byte_addr + 3 >= rom_size)
                 continue;
 
             uint8_t ext_hi, ext_lo;
@@ -879,7 +882,7 @@ void rg_init(uint8_t* rom_data, uint32_t size) {
         }
 
         // Проверка целевого адреса на попадание в ROM и чётность
-        if (target < (int32_t)trim || target >= (int32_t)size || (target & 1)) 
+        if (target < (int32_t)trim || target >= (int32_t)rom_size || (target & 1)) 
             continue;
 
         // Правдоподобная BEQ/BNE инструкция
