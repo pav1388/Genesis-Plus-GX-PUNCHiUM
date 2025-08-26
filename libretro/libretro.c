@@ -3707,7 +3707,7 @@ void retro_run(void)
                             uint16_t r = (pixel >> 11) & 0x1F;
                             uint16_t g = (pixel >> 5) & 0x3F;
                             uint16_t b = pixel & 0x1F;
-                            dst_frame[dst_idx] = (r >> 1) << 11 | (g >> 1) << 5 | (b >> 1);
+                            dst_frame[dst_idx] = (r >> 2) << 11 | (g >> 2) << 5 | (b >> 2);
                         }
                     }
                 }
