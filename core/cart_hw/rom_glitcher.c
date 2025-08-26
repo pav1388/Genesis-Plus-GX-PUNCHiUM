@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.0.9"
+#define RG_VERSION "Launch Glitcher v0.0.9b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -77,7 +77,7 @@ rom_glitcher_callbacks_t rg_cbs;
 
 static char log_text[512];
 static uint8_t game_state_buffer[STATE_SIZE];   // буфер для save state игры размером 0xFD000 (1 036 288) байт
-static uint8_t action_after = RG_LOAD_STATE;    // действие после выбора следующего шага 
+//static uint8_t action_after = RG_LOAD_STATE;    // действие после выбора следующего шага 
 static bool need_load_state = false;
 static uint32_t final_percent = 0;
 
@@ -104,8 +104,8 @@ typedef struct {
 
 static rom_glitcher_menu_items_t menu_launch[] = {
     { RG_VERSION, NULL, menu_item_0_launch_glitcher },
-    { "Save state", NULL, game_save_state_to_ram },
-    { "After step", get_label_after_step, menu_item_after_step },
+    //{ "Save state", NULL, game_save_state_to_ram },
+    //{ "After step", get_label_after_step, menu_item_after_step },
     { "List of found glitches", NULL, menu_item_open_list_of_found_glitches }
 };
 
@@ -119,7 +119,7 @@ static rom_glitcher_menu_items_t menu_main[] = {
 };
 
 static rom_glitcher_menu_items_t menu_settings[] = {
-    { "After step", get_label_after_step, menu_item_after_step },
+    //{ "After step", get_label_after_step, menu_item_after_step },
     { "Load state", NULL, game_load_state_from_ram },
     { "Save state", NULL, game_save_state_to_ram },
     { "Reset game", NULL, game_reset },
@@ -167,13 +167,13 @@ static const char* get_label_list_of_found_glitches(void) { // пункты дл
     return dyn_list[j];
 }
 
-static char dyn_label2[32];
+/*static char dyn_label2[32];
 static const char* get_label_after_step(void) { // выбор действия после шага
     snprintf(dyn_label2, sizeof(dyn_label2), "After step > %s",
         (action_after == RG_LOAD_STATE) ? "Load state" :
         (action_after == RG_HARD_RESET) ? "Hard reset" : "!eRRoR1");
     return dyn_label2;
-}
+}*/
 
 static char dyn_label1[32];
 static const char* get_label_step_back(void) {
@@ -212,10 +212,10 @@ static void menu_item_open_list_of_found_glitches(void) { // открыть сп
     menu_show();
 }
 
-static void menu_item_after_step(void) { // выбор действия после шага
+/*static void menu_item_after_step(void) { // выбор действия после шага
     action_after = (action_after + 1) % 2;
     menu_show();
-}
+}*/
 
 static uint32_t xorshift(uint32_t* seed) { // замена для rand()
     uint32_t x = *seed;
@@ -231,11 +231,11 @@ static void shuffle_instructions(void) {
     const uint32_t max = 51;
     static uint32_t seed = 19881029;
 
-    seed ^= m68k_get_reg(M68K_REG_PC); // регистр m68k
+    /*seed ^= m68k_get_reg(M68K_REG_PC);
     seed ^= rg_main.glitch_count;
     seed ^= rg_main.step_count;
     seed ^= rg_main.bug_step_count;
-    seed ^= found_glitches.count;
+    seed ^= found_glitches.count;*/
 
     // расчёт максимального процента изменяемых инструкций
     uint32_t progress = rg_main.glitch_count * 100 / rg_main.total_glitch_count;
@@ -268,6 +268,7 @@ static void shuffle_instructions(void) {
 
 static void menu_item_0_launch_glitcher(void) { // действие 0 "Launch Glitcher"
     if (rg_main.init_done) {
+        game_save_state_to_ram();
         rg_main.launch = true;
         menu.current = &menu.main;
         create_search_backup();
@@ -276,7 +277,7 @@ static void menu_item_0_launch_glitcher(void) { // действие 0 "Launch Gl
         game_reset();
     }
     else
-        show_notification("Candidates NOT FOUND", RG_MSG_ERROR);
+        show_notification("Candidates NOT found", RG_MSG_ERROR);
 }
 
 static void menu_item_1_bug_not_understand(void) { // действие 1 "Bug"
@@ -511,7 +512,7 @@ static void menu_item_3_glitch_found(void) { // действие 3 "Found"
         found_glitches.mod_value[idx] = rg_main.glitches[0].mod_value;
         found_glitches.activate[idx] = false;
         found_glitches.virt_address[idx] = rg_main.glitches[0].address;
-        found_glitches.real_address[idx] = ram_to_rom_offset(found_glitches.virt_address[idx]);
+        found_glitches.real_address[idx] = virt_rom_to_rom_offset(found_glitches.virt_address[idx]);
         add_glitch_as_cheat_to_file(found_glitches.virt_address[idx], found_glitches.real_address[idx],
             found_glitches.initial_value[idx], found_glitches.mod_value[idx]);
 
@@ -555,7 +556,7 @@ static void menu_item_3_glitch_found(void) { // действие 3 "Found"
     /*if (rg_main.range_size < 2 || rg_main.glitch_count < 2) {
         // !!! добавить обработку окончания
         found_glitch_virt_address = rg_main.glitches[rg_main.range_start].address;
-        found_glitch_real_address = ram_to_rom_offset(found_glitch_virt_address);
+        found_glitch_real_address = virt_rom_to_rom_offset(found_glitch_virt_address);
         rg_reset();
         show_notification("RG: Instruction FOUND", RG_MSG_FOUND);
         return;
@@ -564,7 +565,7 @@ static void menu_item_3_glitch_found(void) { // действие 3 "Found"
     // как в оригинале
     //if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
     //    found_glitch_virt_address = rg_main.glitches[rg_main.range_start].address;
-    //    //found_glitch_real_address = ram_to_rom_offset(found_glitch_virt_address);
+    //    //found_glitch_real_address = virt_rom_to_rom_offset(found_glitch_virt_address);
     //    show_notification("RG: Instruction FOUND", RG_MSG_FOUND);
     //    //rg_reset();
     //    return;
@@ -784,10 +785,10 @@ static void apply_glitches(void) {
         if (found_glitches.activate[i] && found_glitches.virt_address[i])
             cart.rom[found_glitches.virt_address[i]] = found_glitches.mod_value[i];
 
-    if (action_after == RG_LOAD_STATE)
+    //if (action_after == RG_LOAD_STATE)
         need_load_state = true;
-    else if (action_after == RG_HARD_RESET)
-        show_notification("Hard reset", RG_MSG_INFO);
+    //else if (action_after == RG_HARD_RESET)
+        //show_notification("Hard reset", RG_MSG_INFO);
 
     // если заголовок не был удалён эмулятором
     if (!rom_has_header) {
@@ -837,6 +838,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     rg_main.glitches = malloc(rg_main.capacity * sizeof(rom_glitch_t));
 
     uint32_t trim = rom_has_header ? 0 : 0x200;
+
     if (rom_size <= trim) {
         show_notification("ROM too small", RG_MSG_ERROR);
         return;
@@ -849,16 +851,14 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         int32_t target = 0;
 
         high_byte = rom_data[byte_addr];
-        low_byte = rom_data[byte_addr + 1];
 
         // Ищем только BEQ(0x67) и BNE(0x66)
         if (high_byte != 0x66 && high_byte != 0x67) 
             continue;
 
-        // Простая проверка адреса смещения на чётность (как в оригинале)
-        //if ((low_byte & 1) != 0) continue;
+        low_byte = rom_data[byte_addr + 1];
 
-        // Дополнительная проверка целевого адреса назначения инструкции
+        // Проверка целевого адреса назначения инструкции
         if (low_byte != 0 && (low_byte & 1) == 0) {
             // Короткое смещение
             int8_t disp8 = (int8_t)low_byte;
@@ -877,6 +877,10 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             ext_hi = rom_data[byte_addr + 2];
             ext_lo = rom_data[byte_addr + 3];
             int16_t disp16 = (int16_t)((ext_hi << 8) | ext_lo);
+
+            if (disp16 == 0)
+                continue;
+
             uint32_t pc_next = byte_addr + 4;
             target = (int32_t)pc_next + (int32_t)disp16;
         }
@@ -993,7 +997,7 @@ void rg_deinit(void) {
     rg_backup_count = 0;
 
     memset(&rg_main, 0, sizeof(rg_main));
-    action_after = RG_LOAD_STATE;
+    //action_after = RG_LOAD_STATE;
     need_load_state = false;
     final_percent = 0;
     found_glitches.count = 0;
@@ -1006,7 +1010,7 @@ void rg_deinit(void) {
 
 // Преобразование найденного адреса глитча из
 // виртуального ROM эмулятора в реальный ROM адрес
-static uint32_t ram_to_rom_offset(uint32_t address) {
+static uint32_t virt_rom_to_rom_offset(uint32_t address) {
     uint32_t file_offset = address;
 
     if (rom_was_deinterleaved) { // если к ROM применялся деинтерлив
@@ -1266,7 +1270,7 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
     char tmp[128];
     //snprintf(tmp, sizeof(tmp), "Glitch saved to \"%s\"", path_to_show);
     snprintf(tmp, sizeof(tmp), "Glitch saved to \"%s\"", cheats_path);
-    show_notification(tmp, RG_MSG_INFO);
+    show_notification(tmp, RG_MSG_FOUND);
 
     return 0;
 }
@@ -1294,7 +1298,7 @@ static void show_notification(const char* s, uint8_t context) {
     }
     else if (context == RG_MSG_FOUND) {
         snprintf(msg_text, sizeof(msg_text), "RG FOUND: %s.", s);
-        duration = 20000;
+        duration = 15000;
         priority = 5;
         level = RETRO_LOG_INFO;
     }
@@ -1323,7 +1327,7 @@ static void game_reset(void) {
 // сохранить save state игры в памяти для работы с глитчером
 static void game_save_state_to_ram(void) {
     if (retro_serialize(game_state_buffer, sizeof(game_state_buffer)))
-        show_notification("State saved to RAM", RG_MSG_INFO);
+        show_notification("State saved", RG_MSG_INFO);
     else
         show_notification("State NOT saved", RG_MSG_ERROR);
 }
@@ -1333,7 +1337,7 @@ static void game_load_state_from_ram(void) {
     menu_hide();
 
     if (retro_unserialize(game_state_buffer, sizeof(game_state_buffer))) {
-        //show_notification("State loaded from RAM", RG_MSG_INFO);
+        //show_notification("State loaded", RG_MSG_INFO);
     }
     else
         show_notification("State NOT loaded", RG_MSG_ERROR);
