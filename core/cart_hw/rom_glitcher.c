@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.0.10b"
+#define RG_VERSION "Launch Glitcher v0.1.0"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -309,8 +309,8 @@ static void menu_item_1_bug_not_understand(void) { // действие 1 "Bug"
     create_search_backup();
     restore_instructions();
 
-    if (rg_main.localizing)
-        return;
+    //if (rg_main.localizing)
+        //return;
 
     if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
         if (rg_main.range_size == 1) {
