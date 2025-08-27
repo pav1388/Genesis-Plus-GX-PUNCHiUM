@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.0.9b"
+#define RG_VERSION "Launch Glitcher v0.0.10b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -12,6 +12,7 @@
 #define PATH_MAX 512
 //#define RG_STATE_SIGNATURE "RGI"
 //#define RG_STATE_VERSION 1
+#define ALG_MAX_RAND 0
 
 #include "rom_glitcher.h"
 #include <stdlib.h>
@@ -78,7 +79,10 @@ rom_glitcher_callbacks_t rg_cbs;
 static char log_text[512];
 static uint8_t game_state_buffer[STATE_SIZE];   // буфер для save state игры размером 0xFD000 (1 036 288) байт
 static bool need_load_state = false;
+
+#if ALG_MAX_RAND
 static uint32_t final_percent = 0;
+#endif
 
 static bool rom_in_mdx = false;             // rom был в формате MDX?
 static bool rom_is_byte_swapped = false;    // ROM был изначально байт-свапнут?
@@ -107,7 +111,7 @@ static rom_glitcher_menu_items_t menu_launch[] = {
 };
 
 static rom_glitcher_menu_items_t menu_main[] = {
-    { "[B]BUG [X]NOT_FOUND [A]FOUND [Y]Step_back", get_label_main, NULL },
+    { "BUG NOT_FOUND FOUND Step_back", get_label_main, NULL },
     { "Reset Glitcher", NULL, rg_reset },
     { "Options", NULL, menu_item_open_options }
 };
@@ -213,15 +217,16 @@ static uint32_t xorshift(uint32_t* seed) { // замена для rand()
 
 // перемешивание инструкций
 static void shuffle_instructions(void) {
+#if ALG_MAX_RAND
     const uint32_t min = 2;
     const uint32_t max = 51;
     static uint32_t seed = 19881029;
 
-    /*seed ^= m68k_get_reg(M68K_REG_PC);
+    seed ^= m68k_get_reg(M68K_REG_PC);
     seed ^= rg_main.glitch_count;
     seed ^= rg_main.step_count;
     seed ^= rg_main.bug_step_count;
-    seed ^= found_glitches.count;*/
+    seed ^= found_glitches.count;
 
     // расчёт максимального процента изменяемых инструкций
     uint32_t progress = rg_main.glitch_count * 100 / rg_main.total_glitch_count;
@@ -237,29 +242,55 @@ static void shuffle_instructions(void) {
             rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value ^ 1;
             rg_main.range_start++; // log
         }
+#else
+    static uint32_t seed = 19881029;
+    
+    for (uint32_t i = 0; i < rg_main.glitch_count; i++) {
+        uint32_t random_index = xorshift(&seed) % rg_main.glitch_count;
+        rom_glitch_t tmp = rg_main.glitches[i];
+        rg_main.glitches[i] = rg_main.glitches[random_index];
+        rg_main.glitches[random_index] = tmp;
+    }
 
-    // равномерное перераспределение
-    //for (uint32_t i = 0; i < rg_main.glitch_count - 1; i++) {
-    //    uint32_t j = i + xorshift(&seed) % (rg_main.glitch_count - i);
-    //    uint8_t tmp = rg_main.glitches[i].initial_value;
-    //    rg_main.glitches[i].mod_value = rg_main.glitches[j].initial_value;
-    //    rg_main.glitches[j].mod_value = tmp;
-    //}
-        //rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value ^ 1;
+    //равномерное перемешивание
+    /*for (uint32_t i = 0; i < rg_main.glitch_count - 1; i++) {
+        uint32_t j = i + (xorshift(&seed) % (rg_main.glitch_count - i));
+        rom_glitch_t temp = rg_main.glitches[i];
+        rg_main.glitches[i] = rg_main.glitches[j];
+        rg_main.glitches[j] = temp;
+    }*/
+#endif // ALG_MAX_RAND
+}
 
-    // как в оригинале
-    /*for (uint32_t i = 0; i < rg_main.glitch_count; i++)
-        rg_main.glitches[i] = rg_main.glitches[rand() % rg_main.glitch_count];*/
+// восстановить оригинальные значения инструкций
+static void restore_instructions(void) {
+    if (!rg_main.glitches) return;
+
+#if ALG_MAX_RAND
+    for (uint32_t i = 0; i < rg_main.glitch_count; i++)
+        rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value; 
+#else
+    for (uint32_t i = rg_main.range_start; i < rg_main.range_start + rg_main.range_size && i < rg_main.glitch_count; i++)
+        rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value;
+#endif // ALG_MAX_RAND
+}
+
+// инвертирование инструкций
+static void inversion_instructions(void) {
+    for (uint32_t i = rg_main.range_start; i < rg_main.range_start + rg_main.range_size && i < rg_main.glitch_count; i++)
+        rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value ^ 1;
 }
 
 static void menu_item_0_launch_glitcher(void) { // действие 0 "Launch Glitcher"
     if (rg_main.init_done) {
+        menu_hide();
         game_save_state_to_ram();
         rg_main.launch = true;
         menu.current = &menu.main;
         create_search_backup();
         shuffle_instructions();
         rg_main.step_count++;
+        inversion_instructions();
         game_reset();
     }
     else
@@ -267,81 +298,49 @@ static void menu_item_0_launch_glitcher(void) { // действие 0 "Launch Gl
 }
 
 static void menu_item_1_bug_not_understand(void) { // действие 1 "Bug"
+#if ALG_MAX_RAND
     create_search_backup();
-    restore_instructions();
+    restore_instructions(); 
     shuffle_instructions();
     rg_main.step_count++;
     rg_main.bug_step_count++;
     game_reset();
-    
-    //if (rg_main.init_done && !rg_main.localizing) { // действие bug/not understand
-    //create_search_backup();
-    //restore_instructions();
-    
-    /*if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
-        // обработка окончания
-        rg_reset();
-        show_notification("RG: Instruction NOT FOUND. Try again.", RG_MSG_ERROR);
-        return;
-    }
+#else
+    create_search_backup();
+    restore_instructions();
 
-    //rg_main.range_start += rg_main.range_size;
-    //if (rg_main.range_start >= rg_main.glitch_count) {
-    if ((rg_main.range_start + rg_main.range_size) >= rg_main.glitch_count) {
-        rg_main.range_start = 0;
-        rg_main.range_size /= 2; // уменьшаем окно, если дошли до конца
-        if (!rg_main.localizing && rg_main.range_size > 1) {
-            shuffle_instructions();
+    if (rg_main.localizing)
+        return;
+
+    if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
+        if (rg_main.range_size == 1) {
+            if (rg_main.localizing)
+                show_notification("Glitch NOT found. Try again (#7)", RG_MSG_ERROR);
+            else
+                show_notification("Glitch NOT found. Try again (#6)", RG_MSG_ERROR);
+
+            rg_reset();
+            return;
+        }
+        else {
+            rg_main.range_start = 0;
+            rg_main.range_size -= rg_main.range_size / 2;
+
+            if (!rg_main.localizing)
+                shuffle_instructions();
         }
     }
     else
         rg_main.range_start += rg_main.range_size;
-    */
 
-    // как в оригинале
-    //if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
-    //    if (rg_main.range_size == 1) {
-    //        show_notification("RG ERROR: Instruction NOT FOUND. Try again.", RG_MSG_ERROR);
-    //        //rg_reset();
-    //        return;
-    //    }
-    //    else {
-    //        rg_main.range_start = 0;
-    //        rg_main.range_size /= 2;
-    //    }
-    //}
-    //else
-    //    rg_main.range_start += rg_main.range_size;
-
-    //if (!rg_main.localizing)
-    //    shuffle_instructions();
+    rg_main.step_count++;
+    inversion_instructions();
+    game_reset();
+#endif // ALG_MAX_RAND
 }
 
-// удаление текущего диапазона инструкций
-//static void remove_current_range(void) {
-//    if (!rg_main.glitches || rg_main.glitch_count == 0) return;
-//    if (rg_main.range_start >= rg_main.glitch_count) return;
-//
-//    // корректируем размер, если выходим за границы
-//    uint32_t remove_size = rg_main.range_size;
-//    if (rg_main.range_start + remove_size > rg_main.glitch_count) {
-//        remove_size = rg_main.glitch_count - rg_main.range_start;
-//    }
-//    if (remove_size == 0) return;
-//
-//    // удаляем диапазон
-//    memmove(&rg_main.glitches[rg_main.range_start],
-//        &rg_main.glitches[rg_main.range_start + remove_size],
-//        (rg_main.glitch_count - rg_main.range_start - remove_size) * sizeof(rom_glitch_t));
-//
-//    rg_main.glitch_count -= remove_size;
-//
-//    if (rg_main.range_start >= rg_main.glitch_count) {
-//        rg_main.range_start = 0;
-//    }
-//}
-
 static void menu_item_2_glitch_not_found(void) { // действие 2 "Not found"
+#if ALG_MAX_RAND
     if (rg_main.glitch_count > rg_main.total_glitch_count) {
         show_notification("(#2)", RG_MSG_ERROR);
         rg_reset();
@@ -375,87 +374,54 @@ static void menu_item_2_glitch_not_found(void) { // действие 2 "Not foun
     rg_main.step_count++;
     rg_main.bug_step_count = 0;
     game_reset();
-    
-    //create_search_backup();
-    //restore_instructions();
+#else
+    create_search_backup();
+    restore_instructions();
 
-    //if (rg_main.range_size < 2 || rg_main.glitch_count < 2) {
-    //    // обработка окончания
-    //    rg_reset();
-    //    show_notification("RG: Instruction NOT FOUND. Try again.", RG_MSG_ERROR);
-    //    return;
-    //}
-    //
-    //if ((rg_main.range_start + rg_main.range_size) >= rg_main.glitch_count) {
-    //    rg_main.range_start = 0;
-    //    rg_main.range_size /= 2;
-    //    if (!rg_main.localizing)
-    //        shuffle_instructions();
-    //}
-    //else {
-    //    // удаляем инструкции внутри окна 
-    //    remove_current_range();
-    //    rg_main.range_size /= 2;
-    //}
+    if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
+        if (rg_main.range_size == 1 || rg_main.range_start == 0) {
+            if (rg_main.localizing)
+                show_notification("Glitch NOT found. Try again (#9)", RG_MSG_ERROR);
+            else
+                show_notification("Glitch NOT found. Try again (#8)", RG_MSG_ERROR);
 
-    // как в оригинале
-    //if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
-    //    if (rg_main.range_size == 1 || rg_main.range_start == 0) {
-    //        show_notification("RG ERROR: Instruction NOT FOUND. Try again.", RG_MSG_ERROR);
-    //        //rg_reset();
-    //        return;
-    //    }
-    //    else {
-    //        // ??? инструкции_на_инвертирование.resize(окно_начало);
-    //        rg_main.range_start = 0;
-    //        rg_main.range_size /= 2;
-    //    }
-    //}
-    //else {
-    //    remove_current_range();
-    //    if (rg_main.localizing)
-    //        rg_main.range_size /= 2;
-    //}
+            rg_reset();
+            return;
+        }
+        else {
+            rg_main.glitch_count = rg_main.range_start;
+            rg_main.range_start = 0;
+            rg_main.range_size -= rg_main.range_size / 2;
 
-    //if (!rg_main.localizing)
-    //    shuffle_instructions();
+            if (!rg_main.localizing)
+                shuffle_instructions();
+        }
+    }
+    else {
+        uint32_t remove_size = rg_main.range_size;
+        if (rg_main.range_start + remove_size > rg_main.glitch_count) {
+            remove_size = rg_main.glitch_count - rg_main.range_start;
+        }
+
+        if (remove_size > 0) {
+            memmove(&rg_main.glitches[rg_main.range_start],
+                &rg_main.glitches[rg_main.range_start + remove_size],
+                (rg_main.glitch_count - rg_main.range_start - remove_size) * sizeof(rom_glitch_t));
+            rg_main.glitch_count -= remove_size;
+        }
+        
+        if (rg_main.localizing)
+            rg_main.range_size -= rg_main.range_size / 2;
+    }
+
+    rg_main.step_count++;
+    inversion_instructions();
+    game_reset();
+#endif // ALG_MAX_RAND
 }
 
-// оставить только указанный диапазон
-//static void keep_only_current_range(void) {
-//    if (!rg_main.glitches || rg_main.glitch_count == 0) {
-//        rg_main.range_start = 0;
-//        rg_main.range_size = 0;
-//        return;
-//    }
-//
-//    // Корректируем размер, если выходим за границы
-//    uint32_t keep_size = rg_main.range_size;
-//    if (rg_main.range_start + keep_size > rg_main.glitch_count) {
-//        keep_size = rg_main.glitch_count - rg_main.range_start;
-//    }
-//    if (keep_size == 0) {
-//        rg_main.glitch_count = 0;
-//        rg_main.range_start = 0;
-//        rg_main.range_size = 0;
-//        return;
-//    }
-//
-//    // Переносим нужный диапазон в начало массива
-//    memmove(rg_main.glitches,
-//        &rg_main.glitches[rg_main.range_start],
-//        keep_size * sizeof(rom_glitch_t));
-//
-//    rg_main.glitch_count = keep_size;
-//    rg_main.range_start = 0;
-//
-//    // Если окно больше, чем количество оставшихся инструкций — обрезаем
-//    if (rg_main.range_size > rg_main.glitch_count) {
-//        rg_main.range_size = rg_main.glitch_count;
-//    }
-//}
-
 static void menu_item_3_glitch_found(void) { // действие 3 "Found"
+#if ALG_MAX_RAND
     if (rg_main.glitch_count > rg_main.total_glitch_count) {
         show_notification("(#3)", RG_MSG_ERROR);
         rg_reset();
@@ -538,34 +504,90 @@ static void menu_item_3_glitch_found(void) { // действие 3 "Found"
     rg_main.step_count++;
     rg_main.bug_step_count = 0;
     game_reset();
+#else
+    create_search_backup();
 
-    /*if (rg_main.range_size < 2 || rg_main.glitch_count < 2) {
-        // !!! добавить обработку окончания
-        found_glitch_virt_address = rg_main.glitches[rg_main.range_start].address;
-        found_glitch_real_address = virt_rom_to_real_rom_offset(found_glitch_virt_address);
+    if (!rg_main.localizing) {
+        rg_main.localizing = true;
+        //сохранение_поиска(); // нет реализации !!!
+    }
+
+    if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
+        // глитч найден
+        uint8_t idx;
+
+        // поиск дубликата в уже найденных глитчах
+        for (int i = 1; i < RG_GLITCH_SLOTS_MAX; i++) {
+            if (rg_main.glitches[0].address == found_glitches.virt_address[i]) {
+                show_notification("Duplicate. Glitch has already been found", RG_MSG_INFO);
+                rg_reset();
+                return;
+            }
+        }
+
+        // выбор слота для добавления глитча в список найденных
+        if (found_glitches.count < RG_GLITCH_SLOTS_MAX) {
+            idx = found_glitches.count;
+            found_glitches.count++;
+        }
+        else {
+            for (int i = 1; i < RG_GLITCH_SLOTS_MAX; i++) {
+                found_glitches.virt_address[i - 1] = found_glitches.virt_address[i];
+                found_glitches.initial_value[i - 1] = found_glitches.initial_value[i];
+                found_glitches.real_address[i - 1] = found_glitches.real_address[i];
+                found_glitches.activate[i - 1] = found_glitches.activate[i];
+            }
+
+            idx = RG_GLITCH_SLOTS_MAX - 1;
+            show_notification("Slots are full. Glitch #1 removed", RG_MSG_INFO);
+        }
+
+        found_glitches.initial_value[idx] = rg_main.glitches[0].initial_value;
+        found_glitches.mod_value[idx] = rg_main.glitches[0].mod_value;
+        found_glitches.activate[idx] = false;
+        found_glitches.virt_address[idx] = rg_main.glitches[0].address;
+        found_glitches.real_address[idx] = virt_rom_to_real_rom_offset(found_glitches.virt_address[idx]);
+        add_glitch_as_cheat_to_file(found_glitches.virt_address[idx], found_glitches.real_address[idx],
+            found_glitches.initial_value[idx], found_glitches.mod_value[idx]);
+
+        char temp[84];
+        snprintf(temp, sizeof(temp), "Glitch #%u. Steps %u, Real ROM '0x%06X' (VirtROM %06X)",
+            found_glitches.count, rg_main.step_count, found_glitches.real_address[found_glitches.count - 1],
+            found_glitches.virt_address[found_glitches.count - 1]);
+        show_notification(temp, RG_MSG_FOUND);
         rg_reset();
-        show_notification("RG: Instruction FOUND", RG_MSG_FOUND);
         return;
-    }*/
+    }
+    else {
+        restore_instructions();
 
-    // как в оригинале
-    //if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
-    //    found_glitch_virt_address = rg_main.glitches[rg_main.range_start].address;
-    //    //found_glitch_real_address = virt_rom_to_real_rom_offset(found_glitch_virt_address);
-    //    show_notification("RG: Instruction FOUND", RG_MSG_FOUND);
-    //    //rg_reset();
-    //    return;
-    //}
+        if (rg_main.range_start > 0 && rg_main.range_start < rg_main.glitch_count) {
+            uint32_t remove_size = rg_main.range_start;
+            memmove(rg_main.glitches,
+                &rg_main.glitches[rg_main.range_start],
+                (rg_main.glitch_count - rg_main.range_start) * sizeof(rom_glitch_t));
+            rg_main.glitch_count -= remove_size;
+        }
 
-    //create_search_backup();
-    //restore_instructions();
-    //keep_only_current_range();
-    //rg_main.range_size /= 2;
+        rg_main.range_start = 0;
+
+        if (rg_main.range_size < rg_main.glitch_count)
+            rg_main.glitch_count = rg_main.range_size;
+        else if (rg_main.range_size > rg_main.glitch_count)
+                rg_main.range_size = rg_main.glitch_count;
+
+        rg_main.range_size -= rg_main.range_size / 2;
+    }
+
+    rg_main.step_count++;
+    inversion_instructions();
+    game_reset();
+#endif // ALG_MAX_RAND
 }
 
 static void menu_item_4_step_back(void) { // действие 4 "Step back"
     if (rg_backup_count == 0) {
-        show_notification("No previous search states", RG_MSG_ERROR);
+        show_notification("No data from previous step", RG_MSG_ERROR);
         return;
     }
 
@@ -635,9 +657,15 @@ static void menu_show(void) {
     rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
 
     // строка с логами внизу экрана
+#if ALG_MAX_RAND
     snprintf(log_text, sizeof(log_text), "Steps:%u (%s)  |  Candidates:%u/%u  |  %u%%  |  Range swap:%u rem:%u",
         rg_main.step_count, rg_main.localizing ? "local" : "search", rg_main.glitch_count,
         rg_main.total_glitch_count, final_percent, rg_main.range_start, rg_main.range_size);
+#else
+    snprintf(log_text, sizeof(log_text), "Steps:%u (%s)  |  Candidates:%u/%u  |  %u%%  |  Range start:%u size:%u",
+        rg_main.step_count, rg_main.localizing ? "local" : "search", rg_main.glitch_count,
+        rg_main.total_glitch_count, (rg_main.glitch_count ? ((rg_main.range_size * 100) / rg_main.glitch_count) : 0), rg_main.range_start, rg_main.range_size);
+#endif // ALG_MAX_RAND
 
     struct retro_message msg_under = { log_text, 2400 }; // {текст, время отображения в кадрах} (2400 = 40 сек при 60 Гц)
     rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_under);
@@ -910,7 +938,6 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         rg_main.glitch_count++;
     }
 
-    final_percent = 0;
     need_load_state = false;
     menu.current = &menu.launch;
     rg_main.total_glitch_count = rg_main.glitch_count;
@@ -919,9 +946,12 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     rg_main.localizing = false;
     rg_main.launch = false;
     rg_main.range_start = 0;
-    rg_main.range_size = 0;
     rg_main.init_done = rg_main.glitch_count ? true : false;
 
+#if ALG_MAX_RAND
+    final_percent = 0;
+    rg_main.range_size = 0;
+#else
     //выбор размера стартового окна в зависимости от общего количества найденных команд,
     //чтобы изначально "мягче" ломать игру с большим количеством команд
     //if (rg_main.total_glitch_count < 512) // !!! значение наугад, потом надо поправить
@@ -931,11 +961,12 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     //else if (rg_main.total_glitch_count < 2048) // !!! значение наугад, потом надо поправить
     //    rg_main.range_size = (rg_main.total_glitch_count + 7) / 8; // 1/8
     //else
-    //    rg_main.range_size = (rg_main.total_glitch_count + 15) / 16; // 1/16
-    
-    char s[64];
-    snprintf(s, sizeof(s), "Candidates %u%s", rg_main.glitch_count, rg_main.init_done ? "" : " NOT FOUND");
-    show_notification(s, rg_main.init_done ? RG_MSG_INFO : RG_MSG_ERROR);
+        rg_main.range_size = (rg_main.total_glitch_count + 15) / 16; // 1/16
+#endif
+
+    char tmp[64];
+    snprintf(tmp, sizeof(tmp), "Candidates: %u%s", rg_main.glitch_count, rg_main.init_done ? "" : ", NOT found");
+    show_notification(tmp, rg_main.init_done ? RG_MSG_INFO : RG_MSG_ERROR);
 }
 
 // сохранение предыдущего состояния отсеивания кандидатов
@@ -961,24 +992,18 @@ static void create_search_backup(void) {
             slot->backup.glitches = NULL;
             slot->backup.glitch_count = 0;
             show_notification("Previous step NOT saved (memory)", RG_MSG_ERROR);
+            return;
         }
     }
     else {
         slot->glitches_backup = NULL;
         show_notification("Previous step NOT saved (no data)", RG_MSG_ERROR);
+        return;
     }
 
     rg_backup_index = (rg_backup_index + 1) % RG_BACKUP_SLOTS_MAX;
     if (rg_backup_count < RG_BACKUP_SLOTS_MAX)
         rg_backup_count++;
-}
-
-// восстановить оригинальные значения инструкций
-static void restore_instructions(void) {
-    if (!rg_main.glitches) return;
-
-    for (uint32_t i = 0; i < rg_main.glitch_count; i++)
-        rg_main.glitches[i].mod_value = rg_main.glitches[i].initial_value;
 }
 
 // сброс состояния глитчера
@@ -991,6 +1016,9 @@ static void rg_reset(void) {
 
 // очистка памяти при закрытии ядра
 void rg_deinit(void) {
+    menu_hide();
+    menu.current = NULL; 
+    
     if (rg_main.glitches) {
         free(rg_main.glitches);
         rg_main.glitches = NULL;
@@ -1007,13 +1035,10 @@ void rg_deinit(void) {
 
     memset(&rg_main, 0, sizeof(rg_main));
     need_load_state = false;
-    final_percent = 0;
     found_glitches.count = 0;
     memset(found_glitches.virt_address, 0, sizeof(found_glitches.virt_address));
     memset(found_glitches.real_address, 0, sizeof(found_glitches.real_address));
     memset(found_glitches.initial_value, 0, sizeof(found_glitches.initial_value));
-    menu_hide();
-    menu.current = NULL;
 }
 
 // Преобразование найденного адреса глитча из
@@ -1342,7 +1367,7 @@ static void game_save_state_to_ram(void) {
         show_notification("State NOT saved", RG_MSG_ERROR);
 }
 
-// загрузить save state игры из памяти для работы с глитчером
+// загрузить load state игры из памяти для работы с глитчером
 static void game_load_state_from_ram(void) {
     menu_hide();
 
