@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.1.0"
+#define RG_VERSION "Launch Glitcher v0.1.1b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -244,21 +244,24 @@ static void shuffle_instructions(void) {
         }
 #else
     static uint32_t seed = 19881029;
-    
-    for (uint32_t i = 0; i < rg_main.glitch_count; i++) {
+    seed ^= m68k_get_reg(M68K_REG_PC);
+    seed ^= m68k_get_reg(M68K_REG_IR);
+    seed ^= m68k_get_reg(M68K_REG_D2);
+
+    /*for (uint32_t i = 0; i < rg_main.glitch_count; i++) {
         uint32_t random_index = xorshift(&seed) % rg_main.glitch_count;
         rom_glitch_t tmp = rg_main.glitches[i];
         rg_main.glitches[i] = rg_main.glitches[random_index];
         rg_main.glitches[random_index] = tmp;
-    }
+    }*/
 
     //равномерное перемешивание
-    /*for (uint32_t i = 0; i < rg_main.glitch_count - 1; i++) {
+    for (uint32_t i = 0; i < rg_main.glitch_count - 1; i++) {
         uint32_t j = i + (xorshift(&seed) % (rg_main.glitch_count - i));
         rom_glitch_t temp = rg_main.glitches[i];
         rg_main.glitches[i] = rg_main.glitches[j];
         rg_main.glitches[j] = temp;
-    }*/
+    }
 #endif // ALG_MAX_RAND
 }
 
@@ -952,16 +955,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     final_percent = 0;
     rg_main.range_size = 0;
 #else
-    //выбор размера стартового окна в зависимости от общего количества найденных команд,
-    //чтобы изначально "мягче" ломать игру с большим количеством команд
-    //if (rg_main.total_glitch_count < 512) // !!! значение наугад, потом надо поправить
-    //    rg_main.range_size = (rg_main.total_glitch_count + 1) / 2; // 1/2
-    //else if (rg_main.total_glitch_count < 1024) // !!! значение наугад, потом надо поправить
-    //    rg_main.range_size = (rg_main.total_glitch_count + 3) / 4; // 1/4
-    //else if (rg_main.total_glitch_count < 2048) // !!! значение наугад, потом надо поправить
-    //    rg_main.range_size = (rg_main.total_glitch_count + 7) / 8; // 1/8
-    //else
-        rg_main.range_size = (rg_main.total_glitch_count + 15) / 16; // 1/16
+    rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // 1/32 + остаток примерно 3%
 #endif
 
     char tmp[64];
