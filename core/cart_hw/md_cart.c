@@ -539,9 +539,10 @@ void md_cart_init(void)
 
   /* detect specific mappers */
   else if (strstr(rominfo.international,"DEMONS OF ASTEBORG") ||
-           strstr(rominfo.international,"ASTEBROS"))
+           strstr(rominfo.international,"ASTEBROS") ||
+           strstr(rominfo.domestic,"DAEMON CLAW"))
   {
-    /* default SSF2+SRAM mapper (fixes Steam versions which incorrectly use Everdrive extended SSF mapper indicator in ROM header) */ 
+    /* default SSF2+SRAM mapper (fixes patched versions incorrectly indicating Everdrive extended SSF mapper in ROM header) */ 
     cart.hw.time_w = default_time_w;
   }
   else if (strstr(rominfo.consoletype,"SEGA SSF"))
@@ -675,8 +676,8 @@ void md_cart_init(void)
     flash_cfi_init(M29W320EB);
   }
   else if (strstr(rominfo.ROMType,"GM") && strstr(rominfo.product,"00000000-00") && 
-           (((rominfo.checksum == 0xcdf5) && (rominfo.realchecksum = 0x603A)) ||  /* Life on Mars */
-            ((rominfo.checksum == 0x6bd5) && (rominfo.realchecksum = 0x1FEA))))   /* Life on Earth Reimagined */
+           (((rominfo.checksum == 0xcdf5) && (rominfo.realchecksum == 0x603A)) ||  /* Life on Mars */
+            ((rominfo.checksum == 0x6bd5) && (rominfo.realchecksum == 0x1FEA))))   /* Life on Earth Reimagined */
   {
     /* SGDK flash-save mapper (ROM+SRAM) */
     m68k.memory_map[0x3f].base    = sram.sram;
