@@ -884,11 +884,13 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     }
 
     // Читаем нормализованный ROM
-    for (uint32_t byte_addr = trim; byte_addr + 1 < rom_size; byte_addr += 2) {
-        uint8_t high_byte = 0;
-        uint8_t low_byte = 0;
-        int32_t target = 0;
+    uint8_t high_byte = 0;
+    uint8_t low_byte = 0;
+    int32_t target_addr = 0;
+    uint8_t target_high_byte = 0;
+    uint8_t target_low_byte = 0;
 
+    for (uint32_t byte_addr = trim; byte_addr + 1 < rom_size; byte_addr += 2) {
         high_byte = rom_data[byte_addr];
 
         // Ищем только BEQ(0x67) и BNE(0x66)
@@ -902,7 +904,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             // Короткое смещение
             int8_t disp8 = (int8_t)low_byte;
             uint32_t pc_next = byte_addr + 2;
-            target = (int32_t)pc_next + (int32_t)disp8;
+            target_addr = (int32_t)pc_next + (int32_t)disp8;
         }
         else {
             // Длинное смещение
@@ -921,11 +923,20 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
                 continue;
 
             uint32_t pc_next = byte_addr + 4;
-            target = (int32_t)pc_next + (int32_t)disp16;
+            target_addr = (int32_t)pc_next + (int32_t)disp16;
         }
 
         // Проверка целевого адреса на попадание в ROM и чётность
-        if (target < (int32_t)trim || target >= (int32_t)rom_size || (target & 1)) 
+        if (target_addr < (int32_t)trim || target_addr >= (int32_t)rom_size || (target_addr & 1)) 
+            continue;
+
+        // Проверка данных по целевому адресу на легальность инструкции для M68K
+        uint16_t target_opcode = (rom_data[target_addr] << 8) | rom_data[target_addr + 1];
+
+        if ((target_opcode & 0b1111000000000000) == 0b1010000000000000 ||  // A-Line:  1010xxxx xxxxxxxx
+            (target_opcode & 0b1111000000000000) == 0b1111000000000000 ||  // F-Line:  1111xxxx xxxxxxxx
+            (target_opcode & 0b1111111111111111) == 0b0100101011111100 ||  // Illegal: 01001010 11111100
+            (target_opcode & 0b1111000100000000) == 0b0111000100000000)    //          0111xxx1 xxxxxxxx
             continue;
 
         // Правдоподобная BEQ/BNE инструкция
@@ -955,7 +966,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     final_percent = 0;
     rg_main.range_size = 0;
 #else
-    rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // 1/32 + остаток примерно 3%
+    rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // 1/32 + остаток (примерно 3%)
 #endif
 
     char tmp[64];
