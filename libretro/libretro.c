@@ -1562,6 +1562,8 @@ static void check_variables(bool first_run)
         punchium_audio_track_format = 2;
      else if (!strcmp(var.value, "ogg"))
         punchium_audio_track_format = 3;
+	 else if (!strcmp(var.value, "Disabled"))
+        punchium_audio_track_format = 0;
      else
         punchium_audio_track_format = 1;
   }
