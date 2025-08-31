@@ -3668,70 +3668,12 @@ void retro_run(void)
         static int pause_frame_width = 0;
         static int pause_frame_height = 0;
 
-        rg_input_processing(); // poll gamepad button presses and process input
+        rg_input_processing();
 
-        if (rg_get_menu_visible()) // pause emulation while menu is active
+        if (rg_get_menu_visible())
         {
-            if (bitmap.data && (!pause_frame || vwidth != pause_frame_width || vheight != pause_frame_height))
-            {
-                //darkening last frame of game
-                if (pause_frame) {
-                    free(pause_frame);
-                    pause_frame = NULL;
-                }
-
-                const int pixel_size = (bitmap.pitch / bitmap.width) > 2 ? 4 : 2;
-                pause_frame = malloc(vwidth * vheight * pixel_size);
-                pause_frame_width = vwidth;
-                pause_frame_height = vheight;
-
-                if (!pause_frame)
-                {
-                    video_cb(bitmap.data, vwidth, vheight, bitmap.pitch);
-                    return;
-                }
-
-                // RGB565 (16 bit)
-                if (pixel_size == 2)
-                {
-                    const uint16_t* src_frame = (const uint16_t*)bitmap.data;
-                    uint16_t* dst_frame = (uint16_t*)pause_frame;
-
-                    for (int y = 0; y < vheight; y++)
-                    {
-                        for (int x = 0; x < vwidth; x++)
-                        {
-                            int src_idx = y * (bitmap.pitch / 2) + x;
-                            int dst_idx = y * vwidth + x;
-                            uint16_t pixel = src_frame[src_idx];
-                            uint16_t r = (pixel >> 11) & 0x1F;
-                            uint16_t g = (pixel >> 5) & 0x3F;
-                            uint16_t b = pixel & 0x1F;
-                            dst_frame[dst_idx] = (r >> 2) << 11 | (g >> 2) << 5 | (b >> 2);
-                        }
-                    }
-                }
-                // RGBA8888 (32 bit)
-                else
-                {
-                    const uint32_t* src_frame = (const uint32_t*)bitmap.data;
-                    uint32_t* dst_frame = (uint32_t*)pause_frame;
-
-                    for (int y = 0; y < vheight; y++)
-                    {
-                        for (int x = 0; x < vwidth; x++)
-                        {
-                            int src_idx = y * (bitmap.pitch / 4) + x;
-                            int dst_idx = y * vwidth + x;
-                            uint32_t pixel = src_frame[src_idx];
-                            uint32_t r = (pixel >> 16) & 0xFF;
-                            uint32_t g = (pixel >> 8) & 0xFF;
-                            uint32_t b = pixel & 0xFF;
-                            dst_frame[dst_idx] = (pixel & 0xFF000000) | (r >> 1) << 16 | (g >> 1) << 8 | (b >> 1);
-                        }
-                    }
-                }
-            }
+            rg_handle_pause_frame(&pause_frame, &pause_frame_width, &pause_frame_height,
+                bitmap.data, vwidth, vheight, bitmap.pitch, bitmap.width);
 
             video_cb(pause_frame ? pause_frame : bitmap.data, vwidth, vheight, vwidth * (bitmap.pitch / bitmap.width));
             return;

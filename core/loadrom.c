@@ -646,7 +646,7 @@ int load_rom(char *filename)
           cart.rom[i-4] = cart.rom[i] ^ 0x40;
         }
         size = size - 5;
-        rg_set_rom_in_mdx(true);
+        rg_set_rom_in_mdx();
       }
 
       /* auto-detect byte-swapped dumps */
@@ -661,7 +661,7 @@ int load_rom(char *filename)
           cart.rom[i] = cart.rom[i+1];
           cart.rom[i+1] = temp;
         }
-        rg_set_rom_is_byte_swapped(true);
+        rg_set_rom_is_byte_swapped();
       }
     }
 
@@ -671,7 +671,7 @@ int load_rom(char *filename)
       /* remove header */
       size -= 512;
       memmove (cart.rom, cart.rom + 512, size);
-      rg_set_rom_has_header(true);
+      rg_set_rom_has_header();
 
       /* assume interleaved Mega Drive / Genesis ROM format (.smd) */
       if (system_hw == SYSTEM_MD)
@@ -680,7 +680,7 @@ int load_rom(char *filename)
         {
           deinterleave_block (cart.rom + (i * 0x4000));
         }
-        rg_set_rom_was_interleaved(true);
+        rg_set_rom_was_interleaved();
       }
     }
   }

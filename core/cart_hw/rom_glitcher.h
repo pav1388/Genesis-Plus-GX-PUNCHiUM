@@ -25,6 +25,7 @@ static const char* get_label_menu_list(void);
 static const char* get_label_main(void);
 static void menu_item_activate_selected_glitch(void);
 static void menu_item_open_options(void);
+static void menu_item_pause_effect(void);
 static void menu_item_0_launch_glitcher(void);
 static void menu_item_1_bug_not_understand(void);
 static void menu_item_2_glitch_not_found(void);
@@ -53,11 +54,13 @@ static void rg_reset(void);
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
 void rg_input_processing(void);
-void rg_set_rom_in_mdx(bool value);
-void rg_set_rom_is_byte_swapped(bool value);
-void rg_set_rom_has_header(bool value);
-void rg_set_rom_was_interleaved(bool value);
+void rg_set_rom_in_mdx(void);
+void rg_set_rom_is_byte_swapped(void);
+void rg_set_rom_has_header(void);
+void rg_set_rom_was_interleaved(void);
 bool rg_get_menu_visible(void);
+void rg_handle_pause_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
+    const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width);
 
 //static uint32_t get_checksum_for_file(const uint8_t* data, size_t size);
 //static bool game_save_state_to_file(const char* path);
