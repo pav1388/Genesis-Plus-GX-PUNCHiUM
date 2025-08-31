@@ -19,6 +19,8 @@ extern rom_glitcher_callbacks_t rg_cbs;
 
 extern const struct retro_game_info* rg_last_game; // info to reload current game
 extern uint8_t rg_menu_button; // menu call button
+extern char g_rom_dir[256];
+extern char g_rom_name[256];
 
 static const char* get_label_list_of_found_glitches(void);
 static const char* get_label_menu_list(void);

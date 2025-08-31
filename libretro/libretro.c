@@ -142,8 +142,8 @@ static uint16_t bitmap_data_[720 * 576];
 
 static bool restart_eq = false;
 
-static char g_rom_dir[256];
-static char g_rom_name[256];
+char g_rom_dir[256];
+char g_rom_name[256];
 static const void *g_rom_data = NULL;
 static size_t g_rom_size      = 0;
 static char *save_dir         = NULL;

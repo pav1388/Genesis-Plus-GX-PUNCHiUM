@@ -944,19 +944,11 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
                 filestream_close(f);
 
                 if (cheats_path[0] && rg_last_game && rg_last_game->path) {
-                    char rom_name[PATH_MAX] = { 0 };
-                    const char* base_name = strrchr(rg_last_game->path, '/');
-                    if (!base_name) base_name = strrchr(rg_last_game->path, '\\');
-                    if (base_name) base_name++; else base_name = rg_last_game->path;
-                    strncpy(rom_name, base_name, sizeof(rom_name) - 1);
-                    char* ext = strrchr(rom_name, '.');
-                    if (ext) *ext = '\0';
-
                     size_t len = strlen(cheats_path);
                     if (len && (cheats_path[len - 1] != '/' && cheats_path[len - 1] != '\\'))
                         strncat(cheats_path, &slash, 1);
 
-                    strncat(cheats_path, rom_name, sizeof(cheats_path) - strlen(cheats_path) - 1);
+                    strncat(cheats_path, g_rom_name, sizeof(cheats_path) - strlen(cheats_path) - 1);
                     strncat(cheats_path, "_RGI.cht", sizeof(cheats_path) - strlen(cheats_path) - 1);
                 }
                 else
@@ -967,23 +959,8 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
         }
         else if (try == 2) {
             if (rg_last_game && rg_last_game->path) {
-                char rom_dir[PATH_MAX] = { 0 };
-                char rom_name[PATH_MAX] = { 0 };
-
-                strncpy(rom_dir, rg_last_game->path, sizeof(rom_dir) - 1);
-                char* base = strrchr(rom_dir, '/');
-                if (!base) base = strrchr(rom_dir, '\\');
-                if (base) *base = '\0';
-
-                const char* base_name = strrchr(rg_last_game->path, '/');
-                if (!base_name) base_name = strrchr(rg_last_game->path, '\\');
-                if (base_name) base_name++; else base_name = rg_last_game->path;
-                strncpy(rom_name, base_name, sizeof(rom_name) - 1);
-                char* ext = strrchr(rom_name, '.');
-                if (ext) *ext = '\0';
-
                 snprintf(cheats_path, sizeof(cheats_path),
-                    "%s%c%s_RGI.cht", rom_dir, slash, rom_name);
+                    "%s%c%s_RGI.cht", g_rom_dir, slash, g_rom_name);
             }
             else
                 continue;
@@ -1004,32 +981,8 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
         return 3;
     }
 
-    char rom_dir[PATH_MAX] = { 0 };
-    char rom_name[PATH_MAX] = { 0 };
-
-    strncpy(rom_dir, rg_last_game->path, sizeof(rom_dir) - 1);
-    char* base = strrchr(rom_dir, '/');
-    if (!base) 
-        base = strrchr(rom_dir, '\\');
-
-    if (base) 
-        *base = '\0';
-
-    const char* base_name = strrchr(rg_last_game->path, '/');
-    if (!base_name) 
-        base_name = strrchr(rg_last_game->path, '\\');
-
-    if (base_name) 
-        base_name++; 
-    else 
-        base_name = rg_last_game->path;
-
-    strncpy(rom_name, base_name, sizeof(rom_name) - 1);
-    char* ext = strrchr(rom_name, '.');
-    if (ext) *ext = '\0';
-
     snprintf(cheats_path, sizeof(cheats_path),
-        "%s%c%s_RGI.cht", rom_dir, slash, rom_name);
+        "%s%c%s_RGI.cht", g_rom_dir, slash, g_rom_name);
 
     f_cht = filestream_open(cheats_path,
         RETRO_VFS_FILE_ACCESS_READ,
