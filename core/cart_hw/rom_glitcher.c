@@ -1,17 +1,14 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.1.1"
+#define RG_VERSION "Launch Glitcher v0.1.2b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
 #define RG_MSG_ERROR 2
 #define RG_MSG_FOUND 3
-#define RG_BACKUP_SLOTS_MAX 9 // любое количество
+#define RG_BACKUP_SLOTS_MAX 9
 #define RG_GLITCH_SLOTS_MAX 7 // <= 7 !
-#define PATH_MAX 512
-//#define RG_STATE_SIGNATURE "RGI"
-//#define RG_STATE_VERSION 1
 
 #include "rom_glitcher.h"
 #include <stdlib.h>
@@ -76,7 +73,7 @@ uint8_t rg_menu_button = RG_DISABLED_KEY;
 rom_glitcher_callbacks_t rg_cbs;
 
 static char log_text[512];
-static uint8_t game_state_buffer[STATE_SIZE];   // буфер для save state игры размером 0xFD000 (1 036 288) байт
+static uint8_t game_state_buffer[STATE_SIZE];
 static bool need_load_state = false;
 
 static bool rom_in_mdx = false;             // rom был в формате MDX?
@@ -85,9 +82,7 @@ static bool rom_has_header = false;         // был удалён заголо�
 static bool rom_was_deinterleaved = false;  // к ROM применялся деинтерлив?
 
 static bool menu_visible = false;           // отображение меню на экране 
-static uint8_t pause_effect = 0;            // эффект при паузе игры
-
-// ************************************************************* MENU
+static uint8_t pause_effect = 0;            // эффект игры при паузе 
 
 typedef struct {
     const char* label; // статическая метка
@@ -209,7 +204,7 @@ static void menu_item_open_list_of_found_glitches(void) { // открыть сп
     menu_show();
 }
 
-static uint32_t xorshift(uint32_t* seed) { // замена для rand()
+static uint32_t xorshift(uint32_t* seed) {
     uint32_t x = *seed;
     x ^= x << 13;
     x ^= x >> 17;
@@ -223,13 +218,6 @@ static void shuffle_instructions(void) {
     seed ^= m68k_get_reg(M68K_REG_PC);
     seed ^= m68k_get_reg(M68K_REG_IR);
     seed ^= m68k_get_reg(M68K_REG_D2);
-
-    /*for (uint32_t i = 0; i < rg_main.glitch_count; i++) {
-        uint32_t random_index = xorshift(&seed) % rg_main.glitch_count;
-        rom_glitch_t tmp = rg_main.glitches[i];
-        rg_main.glitches[i] = rg_main.glitches[random_index];
-        rg_main.glitches[random_index] = tmp;
-    }*/
 
     //равномерное перемешивание
     for (uint32_t i = 0; i < rg_main.glitch_count - 1; i++) {
@@ -339,7 +327,6 @@ static void menu_item_2_glitch_not_found(void) { // действие 2 "Not foun
         }
         
         if (rg_main.localizing)
-            //rg_main.range_size -= rg_main.range_size / 2;
             rg_main.range_size -= rg_main.glitch_count / 2;
     }
 
@@ -495,13 +482,12 @@ static void menu_show(void) {
 
     rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
 
-    // строка с логами внизу экрана
     snprintf(log_text, sizeof(log_text), "Steps:%u (%s)  |  Candidates:%u/%u  |  %u.%u%%  |  Range start:%u size:%u",
         rg_main.step_count, rg_main.localizing ? "local" : "search", rg_main.glitch_count,
         rg_main.total_glitch_count, (rg_main.range_size > 0) ? ((rg_main.range_size * 1000) / rg_main.glitch_count) / 10 : 0,
         (rg_main.range_size > 0) ? ((rg_main.range_size * 1000) / rg_main.glitch_count) % 10 : 0, rg_main.range_start, rg_main.range_size);
 
-    struct retro_message msg_under = { log_text, 2400 }; // {текст, время отображения в кадрах} (2400 = 40 сек при 60 Гц)
+    struct retro_message msg_under = { log_text, 2400 }; // {текст, время отображения в кадрах} (2400 = 40 сек * 60 Гц)
     rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_under);
     memset(log_text, 0, sizeof(log_text));
 }
@@ -510,6 +496,9 @@ static void menu_show(void) {
 static void menu_hide(void) {
     menu_visible = false;
     if (rg_cbs.environ_cb) {
+        struct retro_message clear_msg_under = { " ", 1};
+        rg_cbs.environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &clear_msg_under);
+
         struct retro_message_ext clear_msg = {
             .msg = "", .duration = 1, .priority = 10, .level = RETRO_LOG_DEBUG,
             .target = RETRO_MESSAGE_TARGET_OSD, .type = RETRO_MESSAGE_TYPE_STATUS,
@@ -636,13 +625,11 @@ void rg_input_processing(void)
         }
     }
 }
-// ************************************************************* MENU END
 
-static uint16_t get_rom_checksum(uint8* rom, int length)
-{
+static uint16_t get_rom_checksum(uint8* rom, int size) {
     uint16_t checksum = 0;
 
-    for (int i = 0; i < length; i += 2)
+    for (int i = 0; i < size; i += 2)
         checksum += ((rom[i] << 8) + rom[i + 1]);
 
     return checksum;
@@ -757,7 +744,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         if (target_addr & 1) 
             continue;
 
-        // Проверка данных по целевому адресу на легальность инструкции для M68K
+        // Проверка данных по целевому адресу на легальность для M68K
         uint16_t target_opcode = (rom_data[target_addr] << 8) | rom_data[target_addr + 1];
 
         if ((target_opcode & 0b1111000000000000) == 0b1010000000000000 ||   // 1010xxxx xxxxxxxx
@@ -840,7 +827,7 @@ static void create_search_backup(void) {
         rg_backup_count++;
 }
 
-// сброс состояния глитчера
+// сброс текущего поиска
 static void rg_reset(void) { 
     restore_instructions();
     rg_main.init_done = false;
@@ -902,9 +889,9 @@ static uint32_t virt_rom_to_real_rom_offset(uint32_t address) {
     return file_offset;
 }
 
-// ищет папку с читами для сохранения файла (если не находит, то использует папку с ROM)
+// сохранения файла с читами в папку с ROM
 static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_address, uint8_t initial_value, uint8_t mod_value) {
-    char cheats_path[PATH_MAX] = { 0 };
+    char cheats_path[512] = { 0 };
     RFILE* f_cht = NULL;
 
 #if defined(_WIN32)
@@ -913,69 +900,6 @@ static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address, uint32_t real_
     char slash = '/';
 #endif
 
-    // ищем путь к файлу читов
-    /*for (uint8_t try = 1; try < 4; try++) {
-        if (try == 1) {
-            RFILE* f = filestream_open("retroarch.cfg",
-                RETRO_VFS_FILE_ACCESS_READ,
-                RETRO_VFS_FILE_ACCESS_HINT_NONE);
-            if (f) {
-                char* line = NULL;
-                while ((line = filestream_getline(f))) {
-                    if (strncmp(line, "cheat_database_path", 19) == 0) {
-                        char* val = strchr(line, '=');
-                        if (!val) { free(line); continue; }
-                        val++;
-                        while (*val == ' ' || *val == '\t') val++;
-                        if (*val == '\"') val++;
-                        char* end = strchr(val, '\"');
-                        if (end) *end = '\0';
-
-                        if (val[0] == ':' && (val[1] == '/' || val[1] == '\\'))
-                            snprintf(cheats_path, sizeof(cheats_path), "%s", val + 2);
-                        else
-                            snprintf(cheats_path, sizeof(cheats_path), "%s", val);
-
-                        free(line);
-                        break;
-                    }
-                    free(line);
-                }
-                filestream_close(f);
-
-                if (cheats_path[0] && rg_last_game && rg_last_game->path) {
-                    size_t len = strlen(cheats_path);
-                    if (len && (cheats_path[len - 1] != '/' && cheats_path[len - 1] != '\\'))
-                        strncat(cheats_path, &slash, 1);
-
-                    strncat(cheats_path, g_rom_name, sizeof(cheats_path) - strlen(cheats_path) - 1);
-                    strncat(cheats_path, "_RGI.cht", sizeof(cheats_path) - strlen(cheats_path) - 1);
-                }
-                else
-                    continue;
-            }
-            else
-                continue;
-        }
-        else if (try == 2) {
-            if (rg_last_game && rg_last_game->path) {
-                snprintf(cheats_path, sizeof(cheats_path),
-                    "%s%c%s_RGI.cht", g_rom_dir, slash, g_rom_name);
-            }
-            else
-                continue;
-        }
-        else if (try == 3) {
-            show_notification("Failed to open cheat file", RG_MSG_ERROR);
-            return 1;
-        }
-
-        f_cht = filestream_open(cheats_path,
-            RETRO_VFS_FILE_ACCESS_READ,
-            RETRO_VFS_FILE_ACCESS_HINT_NONE);
-        break;
-    }*/
-    
     if (!rg_last_game || !rg_last_game->path) {
         show_notification("No last game info", RG_MSG_ERROR);
         return 3;
@@ -1270,89 +1194,3 @@ void rg_set_rom_in_mdx(void) { rom_in_mdx = true; }
 void rg_set_rom_is_byte_swapped(void) { rom_is_byte_swapped = true; }
 void rg_set_rom_has_header(void) { rom_has_header = true; }
 void rg_set_rom_was_interleaved(void) { rom_was_deinterleaved = true; }
-
-// подсчёт контрольной суммы (при сохранении и загрузке файла)
-//static uint32_t get_checksum_for_file(const uint8_t* data, size_t size) {
-//    uint32_t sum = 0;
-//    for (size_t i = 0; i < size; i++)
-//        sum += data[i]; // !!! заменить на что-то другое
-//    return sum;
-//}
-
-// сохранить save state игры в файл на диск (не используется)
-//static bool game_save_state_to_file(const char* path) {
-//    state_save(game_state_buffer);
-//
-//    FILE* f = fopen(path, "wb");
-//    if (!f)
-//        return false;
-//
-//    fwrite(RG_STATE_SIGNATURE, 1, 4, f);
-//    fputc(RG_STATE_VERSION, f);
-//
-//    uint32_t size = STATE_SIZE;
-//    fwrite(&size, sizeof(size), 1, f);
-//
-//    uint32_t checksum = get_checksum_for_file(game_state_buffer, STATE_SIZE);
-//    fwrite(&checksum, sizeof(checksum), 1, f);
-//
-//    fwrite(game_state_buffer, 1, STATE_SIZE, f);
-//    fclose(f);
-//
-//    return true;
-//}
-
-// загрузить save state игры из файла на диске (не используется)
-//static bool game_load_state_from_file(const char* path) {
-//    FILE* f = fopen(path, "rb");
-//    if (!f)
-//        return false;
-//
-//    char sig[4];
-//    fread(sig, 1, 4, f);
-//    if (memcmp(sig, RG_STATE_SIGNATURE, 4) != 0) {
-//        fclose(f);
-//        return false;
-//    }
-//
-//    int version = fgetc(f);
-//    if (version != RG_STATE_VERSION) {
-//        fclose(f);
-//        return false;
-//    }
-//
-//    uint32_t size = 0;
-//    fread(&size, sizeof(size), 1, f);
-//    if (size != STATE_SIZE) {
-//        fclose(f);
-//        return false;
-//    }
-//
-//    uint32_t checksum_file = 0;
-//    fread(&checksum_file, sizeof(checksum_file), 1, f);
-//
-//    fread(game_state_buffer, 1, STATE_SIZE, f);
-//    fclose(f);
-//
-//    uint32_t checksum_calc = get_checksum_for_file(game_state_buffer, STATE_SIZE);
-//    if (checksum_calc != checksum_file)
-//        return false;
-//
-//    return state_load(game_state_buffer);
-//}
-
-/*
-// logs
-if (rg_cbs.log_cb) {
-    snprintf(log_text, sizeof(log_text), "");
-    rg_cbs.log_cb(RETRO_LOG_INFO, "%s\n", log_text);
-}
-
-if (rg_cbs.log_cb) {
-            snprintf(log_text, sizeof(log_text),
-                "%u(0x%02X)  ",
-                rg_main.glitches[rg_main.glitch_count].address,
-                rg_main.glitches[rg_main.glitch_count].initial_value);
-            rg_cbs.log_cb(RETRO_LOG_DEBUG, "%s", log_text);
-}
-*/
