@@ -16,7 +16,6 @@ typedef struct {
 } rom_glitcher_callbacks_t;
 
 extern rom_glitcher_callbacks_t rg_cbs;
-
 extern const struct retro_game_info* rg_last_game; // info to reload current game
 extern uint8_t rg_menu_button; // menu call button
 extern char g_rom_dir[256];
@@ -63,9 +62,5 @@ void rg_set_rom_was_interleaved(void);
 bool rg_get_menu_visible(void);
 void rg_handle_pause_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
     const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width);
-
-//static uint32_t get_checksum_for_file(const uint8_t* data, size_t size);
-//static bool game_save_state_to_file(const char* path);
-//static bool game_load_state_from_file(const char* path);
 
 #endif

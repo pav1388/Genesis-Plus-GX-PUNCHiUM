@@ -732,10 +732,10 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 
             int16_t disp16 = (int16_t)((rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3]);
 
-            if (disp16 == 0)
+            if (disp16 == 0 || disp16 == 1)
                 continue;
 
-            target_addr = byte_addr + 4 + (int16_t)disp16;
+            target_addr = byte_addr + 2 + (int16_t)disp16;
         }
 
         if (target_addr < (int32_t)trim || target_addr >= (int32_t)rom_size) 
