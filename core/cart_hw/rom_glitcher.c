@@ -735,6 +735,9 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             if ((disp16 & 1) != 0)
                 continue;
 
+            if (disp16 == 0)
+                continue;
+
             target_addr = byte_addr + 2 + (int16_t)disp16;
         }
 
