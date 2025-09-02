@@ -46,7 +46,7 @@ static void game_reset(void);
 static void game_save_state_to_ram(void);
 static void game_load_state_from_ram(void);
 static uint32_t xorshift(uint32_t* state);
-static uint16_t get_rom_checksum(uint8* rom, int length);
+static uint16_t get_rom_checksum(uint8* rom, int size);
 static uint32_t virt_rom_to_real_rom_offset(uint32_t address);
 static uint8_t add_glitch_as_cheat_to_file(uint32_t virt_address,
     uint32_t real_address, uint8_t intial_value, uint8_t mod_value);

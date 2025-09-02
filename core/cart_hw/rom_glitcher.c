@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.1.2"
+#define RG_VERSION "Launch Glitcher v0.1.3b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -629,8 +629,10 @@ void rg_input_processing(void)
 static uint16_t get_rom_checksum(uint8* rom, int size) {
     uint16_t checksum = 0;
 
-    for (int i = 0; i < size; i += 2)
-        checksum += ((rom[i] << 8) + rom[i + 1]);
+    for (int i = 0; i < size; i += 2) {
+        uint8_t next_byte = (i + 1 < size) ? rom[i + 1] : 1;
+        checksum += ((rom[i] << 8) + next_byte);
+    }
 
     return checksum;
 }
@@ -705,8 +707,6 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     uint8_t high_byte = 0;
     uint8_t low_byte = 0;
     int32_t target_addr = 0;
-    uint8_t target_high_byte = 0;
-    uint8_t target_low_byte = 0;
 
     for (uint32_t byte_addr = trim; byte_addr + 1 < rom_size; byte_addr += 2) {
         high_byte = rom_data[byte_addr];
@@ -717,7 +717,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 
         low_byte = rom_data[byte_addr + 1];
 
-        // Проверка целевого адреса на попадание в ROM и чётность
+        // Проверка целевого адреса на чётность и попадание в ROM
         if (low_byte != 0 && (low_byte & 1) == 0) {
             // Короткое смещение
             target_addr = byte_addr + 2 + (int8_t)low_byte;
@@ -730,9 +730,9 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             if (byte_addr + 3 >= rom_size)
                 continue;
 
-            int16_t disp16 = (int16_t)((rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3]);
+            uint16_t disp16 = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
 
-            if (disp16 == 0 || disp16 == 1)
+            if ((disp16 & 1) != 0)
                 continue;
 
             target_addr = byte_addr + 2 + (int16_t)disp16;
@@ -741,15 +741,14 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         if (target_addr < (int32_t)trim || target_addr >= (int32_t)rom_size) 
             continue;
 
-        if (target_addr & 1) 
-            continue;
-
         // Проверка данных по целевому адресу на легальность для M68K
         uint16_t target_opcode = (rom_data[target_addr] << 8) | rom_data[target_addr + 1];
 
         if ((target_opcode & 0b1111000000000000) == 0b1010000000000000 ||   // 1010xxxx xxxxxxxx
             (target_opcode & 0b1111000000000000) == 0b1111000000000000 ||   // 1111xxxx xxxxxxxx
-            (target_opcode & 0b1111000100000000) == 0b0111000100000000)     // 0111xxx1 xxxxxxxx
+            (target_opcode & 0b1111000100000000) == 0b0111000100000000 ||   // 0111xxx1 xxxxxxxx
+            (target_opcode & 0b1111111111111000) == 0b0100111001111000 ||   // 01001110 01111xxx
+            (target_opcode & 0b1111111111111111) == 0b0100111001110100)     // 01001110 01110100
             continue;
 
         // Правдоподобная BEQ/BNE инструкция
