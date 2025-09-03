@@ -1,7 +1,7 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "Launch Glitcher v0.1.3b"
+#define RG_VERSION "Launch Glitcher v0.1.4b"
 #define RG_LOAD_STATE 0
 #define RG_HARD_RESET 1
 #define RG_MSG_INFO 1
@@ -630,7 +630,7 @@ static uint16_t get_rom_checksum(uint8* rom, int size) {
     uint16_t checksum = 0;
 
     for (int i = 0; i < size; i += 2) {
-        uint8_t next_byte = (i + 1 < size) ? rom[i + 1] : 1;
+        uint8_t next_byte = (i + 1 < size) ? rom[i + 1] : 0;
         checksum += ((rom[i] << 8) + next_byte);
     }
 
@@ -785,7 +785,8 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     rg_main.launch = false;
     rg_main.range_start = 0;
     rg_main.init_done = rg_main.glitch_count ? true : false;
-    rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // примерно 3% от всех кандидатов
+    //rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // примерно 3% от всех кандидатов
+    rg_main.range_size = 128;
 
     char tmp[64];
     snprintf(tmp, sizeof(tmp), "Candidates: %u%s", rg_main.glitch_count, rg_main.init_done ? "" : ", NOT found");
