@@ -786,7 +786,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     rg_main.range_start = 0;
     rg_main.init_done = rg_main.glitch_count ? true : false;
     //rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // примерно 3% от всех кандидатов
-    rg_main.range_size = 128;
+    rg_main.range_size = 128; // фиксированный размер начального диапазона
 
     char tmp[64];
     snprintf(tmp, sizeof(tmp), "Candidates: %u%s", rg_main.glitch_count, rg_main.init_done ? "" : ", NOT found");
