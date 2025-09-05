@@ -148,11 +148,11 @@ static const void *g_rom_data = NULL;
 static size_t g_rom_size      = 0;
 static char *save_dir         = NULL;
 
-static retro_log_printf_t log_cb;
+retro_log_printf_t log_cb;
 static retro_video_refresh_t video_cb;
-static retro_input_poll_t input_poll_cb;
-static retro_input_state_t input_state_cb;
-static retro_environment_t environ_cb;
+retro_input_poll_t input_poll_cb;
+retro_input_state_t input_state_cb;
+retro_environment_t environ_cb;
 static retro_audio_sample_batch_t audio_cb;
 
 enum RetroLightgunInputModes{RetroLightgun, RetroPointer};
@@ -190,7 +190,7 @@ static uint32_t overclock_delay;
 #endif
 
 static bool libretro_supports_option_categories = false;
-static bool libretro_supports_bitmasks          = false;
+bool libretro_supports_bitmasks = false;
 
 #define SOUND_FREQUENCY 44100
 
@@ -1536,51 +1536,75 @@ static void check_variables(bool first_run)
     }
   }
 
-var.key = "rg_menu_button";
+var.key = "rom_glitcher_menu_button";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
 
   if (var.value)
   {
       if (!strcmp(var.value, "disabled"))
           rg_menu_button = RG_DISABLED_KEY;
+      else if (!strcmp(var.value, "L_R"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L) | (1 << RETRO_DEVICE_ID_JOYPAD_R);
+      else if (!strcmp(var.value, "START_SELECT"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_START) | (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
+      else if (!strcmp(var.value, "L_START"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L) | (1 << RETRO_DEVICE_ID_JOYPAD_START);
+      else if (!strcmp(var.value, "R_SELECT"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_R) | (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
+      else if (!strcmp(var.value, "L2_R2"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L2) | (1 << RETRO_DEVICE_ID_JOYPAD_R2);
+      else if (!strcmp(var.value, "L3_R3"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L3) | (1 << RETRO_DEVICE_ID_JOYPAD_R3);
+      else if (!strcmp(var.value, "A_B"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_A) | (1 << RETRO_DEVICE_ID_JOYPAD_B);
+      else if (!strcmp(var.value, "X_Y"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_X) | (1 << RETRO_DEVICE_ID_JOYPAD_Y);
+      else if (!strcmp(var.value, "L_SELECT"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L) | (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
+      else if (!strcmp(var.value, "R_START"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_R) | (1 << RETRO_DEVICE_ID_JOYPAD_START);
+      else if (!strcmp(var.value, "L_R_START"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L) | (1 << RETRO_DEVICE_ID_JOYPAD_R) | (1 << RETRO_DEVICE_ID_JOYPAD_START);
+      else if (!strcmp(var.value, "L2_R2_SELECT"))
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L2) | (1 << RETRO_DEVICE_ID_JOYPAD_R2) | (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
       else if (!strcmp(var.value, "SELECT"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
       else if (!strcmp(var.value, "START"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_START;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_START);
       else if (!strcmp(var.value, "A"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_A;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_A);
       else if (!strcmp(var.value, "B"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_B;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_B);
       else if (!strcmp(var.value, "Y"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_Y;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_Y);
       else if (!strcmp(var.value, "X"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_X; 
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_X);
       else if (!strcmp(var.value, "UP"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_UP;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_UP);
       else if (!strcmp(var.value, "DOWN"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_DOWN;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_DOWN);
       else if (!strcmp(var.value, "LEFT"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_LEFT;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_LEFT);
       else if (!strcmp(var.value, "RIGHT"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_RIGHT;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_RIGHT);
       else if (!strcmp(var.value, "L"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L);
       else if (!strcmp(var.value, "R"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_R);
       else if (!strcmp(var.value, "L2"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L2;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L2);
       else if (!strcmp(var.value, "R2"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R2;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_R2);
       else if (!strcmp(var.value, "L3"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_L3;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_L3);
       else if (!strcmp(var.value, "R3"))
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_R3;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_R3);
       else
-          rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
   }
   else
   {
-      rg_menu_button = RETRO_DEVICE_ID_JOYPAD_SELECT;
+      rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_SELECT);
   }
 
   var.key = "genesis_plus_gx_force_dtack";
@@ -2919,7 +2943,6 @@ void retro_set_environment(retro_environment_t cb)
    };
 
    environ_cb = cb;
-   rg_cbs.environ_cb = cb;
 
    libretro_supports_option_categories = false;
    libretro_set_core_options(environ_cb,
@@ -2953,8 +2976,8 @@ void retro_set_environment(retro_environment_t cb)
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void)cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_cb = cb; }
-void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; rg_cbs.input_poll_cb = cb; }
-void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; rg_cbs.input_state_cb = cb; }
+void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
+void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
 
 
 void retro_get_system_info(struct retro_system_info *info)
@@ -3610,15 +3633,9 @@ void retro_init(void)
    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log))
-   {
        log_cb = log.log;
-       rg_cbs.log_cb = log.log;
-   }
    else
-   {
        log_cb = NULL;
-       rg_cbs.log_cb = NULL;
-   }
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
       libretro_supports_bitmasks = true;
