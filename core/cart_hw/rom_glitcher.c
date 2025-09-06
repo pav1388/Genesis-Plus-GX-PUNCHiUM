@@ -1,14 +1,13 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "v0.1.6"
-#define RANDOM_SEED 1
+#define RG_VERSION "v0.1.7b"
+#define RANDOM_SEED 0
 #define MAX_BACKUP_SLOTS 9
 #define MAX_FOUND_GLITCH_SLOTS 7 // <= 7 !
-#define MAX_FRAMES 3960 // ~ 60 sec max
-#define IDLE_FRAMES 360 // ~ 6 sec max
-#define SHOW_MENU_IN_SECONDS 100
+#define MAX_RECORD_FRAMES 3600 // FPS * 60 sec
 #define MAX_RECORD_GAMEPAD 2
+#define SHOW_MENU_IN_SECONDS 100
 
 #define LOAD_STATE 0
 #define HARD_RESET 1
@@ -76,13 +75,11 @@ static struct {
 } found_glitches;
 
 static struct {
-    //bool launch;
     bool record;
     bool play;
-    uint16_t play_counter;
-    uint16_t idle_counter;
+    uint16_t play_count;
     uint16_t length;
-    int16_t sequence[MAX_RECORD_GAMEPAD][MAX_FRAMES];
+    int16_t sequence[MAX_RECORD_GAMEPAD][MAX_RECORD_FRAMES];
     int16_t hook_mask[MAX_RECORD_GAMEPAD];
     retro_input_state_t input_cb_copy;
 } input_replay;
@@ -99,7 +96,7 @@ static bool rom_was_deinterleaved = false;
 static bool menu_visible = false;
 static uint8_t pause_effect = 0;
 
-static uint8_t g_fps = 60;
+static uint16_t g_fps = 60;
 static char log_text[1024];
 
 typedef struct {
@@ -271,16 +268,9 @@ static void menu_item_0_launch(void) { // действие 0 "Launch Glitcher"
         shuffle_instructions();
         rg_main.step_count++;
         inversion_instructions();
-
-        //input_replay.launch = true;
-        //if (input_replay.launch) {
-            input_replay.record = true;
-            input_replay.play = false;
-            input_replay.length = 0;
-            input_replay.idle_counter = 0;
-        //}
-        //else 
-            //game_reset();
+        input_replay.record = true;
+        input_replay.play = false;
+        input_replay.length = 0;
     }
     else
         show_notification("Candidates NOT found", MSG_ERROR);
@@ -444,6 +434,7 @@ static void menu_item_3_found(void) { // действие 3 "Found"
 static void menu_item_4_step_back(void) { // действие 4 "Step back"
     if (rg_backup_count == 0) {
         show_notification("No data from previous step", MSG_ERROR);
+        game_reset();
         return;
     }
 
@@ -468,12 +459,12 @@ static void menu_item_4_step_back(void) { // действие 4 "Step back"
         else {
             rg_main.glitches = NULL;
             rg_main.glitch_count = 0;
-            show_notification("Step restore failed (memory)", MSG_ERROR);
+            show_notification("Previous step restore failed (memory)", MSG_ERROR);
         }
     }
     else {
         rg_main.glitches = NULL;
-        show_notification("Step restore failed (no backup)", MSG_ERROR);
+        show_notification("Previous step restore failed (no backup)", MSG_ERROR);
     }
 
     game_reset();
@@ -551,10 +542,9 @@ void rg_input_processing(void) {
     if (need_load_state) {
         need_load_state = false;
         game_load_state();
-        //if (input_replay.launch && input_replay.length > 0) {
         if (input_replay.length > 0) {
             input_replay.play = true;
-            input_replay.play_counter = 0;
+            input_replay.play_count = 0;
             input_replay.input_cb_copy = input_state_cb;
             input_state_cb = hook_input_state_cb;
         }
@@ -565,67 +555,47 @@ void rg_input_processing(void) {
 
     int16_t current_mask[MAX_RECORD_GAMEPAD] = { 0 };
 
-    if (libretro_supports_bitmasks)
-        for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++)
-            current_mask[port] = input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
-    else
-        for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++)
-            for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
-                if (input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, id))
-                    current_mask[port] |= (1 << id);
-
     // ----------------- input_replay.record -----------------
     if (input_replay.record) {
-        if (input_replay.length < MAX_FRAMES) {
-            for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++) {
-                input_replay.sequence[port][input_replay.length++] = current_mask[port];
-
-                if (current_mask[port])
-                    input_replay.idle_counter = 0;
-                else
-                    input_replay.idle_counter++;
-            }
-        }
-
-        if (input_replay.idle_counter >= IDLE_FRAMES || input_replay.length >= MAX_FRAMES) {
-            if (input_replay.length > IDLE_FRAMES)
-                input_replay.length -= IDLE_FRAMES;
-            else
-                input_replay.length = 0;
-
+        if (input_replay.length >= MAX_RECORD_FRAMES) {
             input_replay.record = false;
             game_reset();
             return;
         }
 
+        if (libretro_supports_bitmasks)
+            for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++) {
+                current_mask[port] = input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+                input_replay.sequence[port][input_replay.length++] = current_mask[port];
+            }
+        else
+            for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++)
+                for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
+                    if (input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, id)) {
+                        current_mask[port] |= (1 << id);
+                        input_replay.sequence[port][input_replay.length++] = current_mask[port];
+                    }
+        
         char tmp[6];
-        snprintf(tmp, sizeof(tmp), "%d", 100 - (input_replay.idle_counter * 100) / IDLE_FRAMES);
+        snprintf(tmp, sizeof(tmp), "%d", 100 - (input_replay.length * 100) / MAX_RECORD_FRAMES);
         show_notification(tmp, MSG_ASSIST_REC);
-        return;
     }
     // ----------------- input_replay.play -----------------
     else if (input_replay.play && input_replay.length > 0) {
-        int16_t temp_mask = 0;
         if (libretro_supports_bitmasks)
-            temp_mask = input_replay.input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+            current_mask[0] = input_replay.input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
         else
             for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
                 if (input_replay.input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, id))
-                    temp_mask |= (1 << id);
-
-        if ((temp_mask & rg_menu_button) == rg_menu_button) {
-            input_replay.play = false;
-            input_state_cb = input_replay.input_cb_copy;
-            return;
-        }
-        else if (input_replay.play_counter < input_replay.length) {
+                    current_mask[0] |= (1 << id);
+        
+        if (input_replay.play_count < input_replay.length) {
             for (uint8_t port = 0; port < MAX_RECORD_GAMEPAD; port++)
-                input_replay.hook_mask[port] = input_replay.sequence[port][input_replay.play_counter++];
+                input_replay.hook_mask[port] = input_replay.sequence[port][input_replay.play_count++];
             
             char tmp[6];
-            snprintf(tmp, sizeof(tmp), "%d", (input_replay.play_counter * 100) / input_replay.length);
+            snprintf(tmp, sizeof(tmp), "%d", (input_replay.play_count * 100) / input_replay.length);
             show_notification(tmp, MSG_ASSIST_PLAY);
-            return;
         }
         else {
             input_replay.play = false;
@@ -635,6 +605,15 @@ void rg_input_processing(void) {
             menu_show();
             return;
         }
+    }
+    // ----------------- normal -----------------
+    else {
+        if (libretro_supports_bitmasks)
+            current_mask[0] = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+        else
+            for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
+                if (input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, id))
+                    current_mask[0] |= (1 << id);
     }
 
     // 0:Menu, 1:Prev, 2:Next, 3:Confirm/Found, 4:Cancel/Bug, 5:NotFound, 6:StepBack
@@ -646,12 +625,25 @@ void rg_input_processing(void) {
     bool menu_key = ((current_mask[0] & rg_menu_button) == rg_menu_button);
 
     if (!menu_key && button_states[0].was_pressed && !button_states[0].is_processed) {
-        menu_visible = !menu_visible;
-        if (!menu_visible)
-            menu_hide();
-        else {
-            menu.current = rg_main.launch ? &menu.main : &menu.launch;
+        if (input_replay.record) {
+            input_replay.record = false;
+            game_reset();
+        }
+        else if (input_replay.play) {
+            input_replay.play = false;
+            input_state_cb = input_replay.input_cb_copy;
+            menu_visible = true;
+            menu.current = &menu.main;
             menu_show();
+        }
+        else {
+            menu_visible = !menu_visible;
+            if (!menu_visible)
+                menu_hide();
+            else {
+                menu.current = rg_main.launch ? &menu.main : &menu.launch;
+                menu_show();
+            }
         }
 
         button_states[0].is_processed = true;
@@ -659,7 +651,7 @@ void rg_input_processing(void) {
     button_states[0].was_pressed = menu_key;
     if (menu_key) button_states[0].is_processed = false;
 
-    if (menu_visible) {
+    if (menu_visible || input_replay.play) {
         bool prev_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_UP) & 1;
         bool next_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_DOWN) & 1;
         bool confirm_found_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_A) & 1;
@@ -668,7 +660,9 @@ void rg_input_processing(void) {
         bool step_back_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_Y) & 1;
 
         if (!prev_key && button_states[1].was_pressed && !button_states[1].is_processed) {
-            if (menu.current) {
+            if (input_replay.play)
+                ;
+            else if (menu.current) {
                 menu.current->selected_index =
                     (menu.current->selected_index - 1 + menu.current->item_count) % menu.current->item_count;
                 menu_show();
@@ -679,7 +673,9 @@ void rg_input_processing(void) {
         if (prev_key) button_states[1].is_processed = false;
 
         if (!next_key && button_states[2].was_pressed && !button_states[2].is_processed) {
-            if (menu.current) {
+            if (input_replay.play)
+                ;
+            else if (menu.current) {
                 menu.current->selected_index = (menu.current->selected_index + 1) % menu.current->item_count;
                 menu_show();
             }
@@ -689,7 +685,12 @@ void rg_input_processing(void) {
         if (next_key) button_states[2].is_processed = false;
 
         if (!confirm_found_key && button_states[3].was_pressed && !button_states[3].is_processed) {
-            if (menu.current == &menu.main && menu.current->selected_index == 0)
+            if (input_replay.play) {
+                input_replay.play = false;
+                input_state_cb = input_replay.input_cb_copy;
+                menu_item_3_found();
+            }
+            else if (menu.current == &menu.main && menu.current->selected_index == 0)
                 menu_item_3_found();
             else if (menu.current) {
                 rom_glitcher_menu_items_t* item = &menu.current->items[menu.current->selected_index];
@@ -702,7 +703,12 @@ void rg_input_processing(void) {
         if (confirm_found_key) button_states[3].is_processed = false;
 
         if (!cancel_bug_key && button_states[4].was_pressed && !button_states[4].is_processed) {
-            if (menu.current == &menu.options || menu.current == &menu.list) {
+            if (input_replay.play) {
+                input_replay.play = false;
+                input_state_cb = input_replay.input_cb_copy;
+                menu_item_1_bug();
+            }
+            else if (menu.current == &menu.options || menu.current == &menu.list) {
                 menu.current = rg_main.launch ? &menu.main : &menu.launch;
                 menu_show();
             }
@@ -717,7 +723,12 @@ void rg_input_processing(void) {
         if (cancel_bug_key) button_states[4].is_processed = false;
 
         if (!not_found_key && button_states[5].was_pressed && !button_states[5].is_processed) {
-            if (menu.current == &menu.main && menu.current->selected_index == 0)
+            if (input_replay.play) {
+                input_replay.play = false;
+                input_state_cb = input_replay.input_cb_copy;
+                menu_item_2_not_found();
+            }
+            else if (menu.current == &menu.main && menu.current->selected_index == 0)
                 menu_item_2_not_found();
 
             button_states[5].is_processed = true;
@@ -726,7 +737,12 @@ void rg_input_processing(void) {
         if (not_found_key) button_states[5].is_processed = false;
 
         if (!step_back_key && button_states[6].was_pressed && !button_states[6].is_processed) {
-            if (menu.current == &menu.main && menu.current->selected_index == 0)
+            if (input_replay.play) {
+                input_replay.play = false;
+                input_state_cb = input_replay.input_cb_copy;
+                menu_item_4_step_back();
+            }
+            else if (menu.current == &menu.main && menu.current->selected_index == 0)
                 menu_item_4_step_back();
 
             button_states[6].is_processed = true;
@@ -734,12 +750,9 @@ void rg_input_processing(void) {
         button_states[6].was_pressed = step_back_key;
         if (step_back_key) button_states[6].is_processed = false;
     }
-    else {
-        for (int i = 1; i < ARRAY_SIZE(button_states); i++) {
-            button_states[i].was_pressed = false;
-            button_states[i].is_processed = false;
-        }
-    }
+    else
+        for (int i = 1; i < ARRAY_SIZE(button_states); i++)
+            button_states[i].was_pressed = button_states[i].is_processed = false;
 }
 
 static uint16_t get_rom_checksum(uint8* rom, int size) {
@@ -884,13 +897,14 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 
                 log_cb(RETRO_LOG_INFO, "\n\n%s\n\n\n", log_text);
     }*/
-
+#if (!RANDOM_SEED)
+    rg_main.seed = 19881029;
+#endif
     struct retro_system_av_info av_info;
     retro_get_system_av_info(&av_info);
     g_fps = (uint8_t)(av_info.timing.fps + 0.5);
     g_fps = g_fps ? g_fps : 60;
     need_load_state = false;
-    //input_replay.launch = false;
     input_replay.record = false;
     input_replay.play = false;
     menu.current = &menu.launch;
@@ -900,8 +914,8 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     rg_main.launch = false;
     rg_main.range_start = 0;
     rg_main.init_done = rg_main.glitch_count ? true : false;
-    //rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // примерно 3% от всех кандидатов
-    rg_main.range_size = 128; // фиксированный размер начального диапазона
+    rg_main.range_size = (rg_main.total_glitch_count + 31) / 32; // примерно 3% от всех кандидатов
+    //rg_main.range_size = 128; // фиксированный размер начального диапазона
 
     char tmp[64];
     snprintf(tmp, sizeof(tmp), "Candidates: %u%s", rg_main.glitch_count, rg_main.init_done ? "" : ", NOT found");
@@ -1165,7 +1179,7 @@ static void show_notification(const char* s, uint8_t context) {
         level = RETRO_LOG_INFO;
     }
     else if (context == MSG_ASSIST_REC) {
-        snprintf(msg_text, sizeof(msg_text), "RG REPLAY:   RECORD mode (6 sec timeout).");
+        snprintf(msg_text, sizeof(msg_text), "RG REPLAY: RECORD ('Menu' to finish).");
         duration = 33;
         priority = 6;
         level = RETRO_LOG_INFO;
@@ -1173,7 +1187,7 @@ static void show_notification(const char* s, uint8_t context) {
         progress = atoi(s);
     }
     else if (context == MSG_ASSIST_PLAY) {
-        snprintf(msg_text, sizeof(msg_text), "RG REPLAY:   PLAYBACK mode ('Menu' to stop).");
+        snprintf(msg_text, sizeof(msg_text), "RG REPLAY: PLAYBACK ('Menu' to stop). Steps: %d", rg_main.step_count);
         duration = 33;
         priority = 6;
         level = RETRO_LOG_INFO;
