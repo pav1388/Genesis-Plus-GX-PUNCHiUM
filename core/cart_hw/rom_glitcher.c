@@ -1,20 +1,18 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION "v0.1.7b"
-#define RANDOM_SEED 0
-#define MAX_BACKUP_SLOTS 9
-#define MAX_FOUND_GLITCH_SLOTS 7 // <= 7 !
-#define MAX_RECORD_FRAMES 3600 // FPS * 60 sec
-#define MAX_RECORD_GAMEPAD 2
-#define SHOW_MENU_IN_SECONDS 100
+#define RG_VERSION              "v0.1.8b"
+#define RANDOM_SEED             0
+#define MAX_BACKUP_SLOTS        9
+#define MAX_FOUND_GLITCH_SLOTS  7 // <= 7 !
+#define MAX_RECORD_FRAMES       3600 // FPS * 60 sec
+#define MAX_RECORD_GAMEPAD      2
+#define SHOW_MENU_DELAY         100 // seconds
 
-#define LOAD_STATE 0
-#define HARD_RESET 1
-#define MSG_INFO 1
-#define MSG_ERROR 2
-#define MSG_FOUND 3
-#define MSG_ASSIST_REC 4
+#define MSG_INFO        1
+#define MSG_ERROR       2
+#define MSG_FOUND       3
+#define MSG_ASSIST_REC  4
 #define MSG_ASSIST_PLAY 5
 
 #include "rom_glitcher.h"
@@ -112,7 +110,7 @@ typedef struct {
 } rg_menu;
 
 static rom_glitcher_menu_items_t menu_launch[] = {
-    { "Launch Glitcher", NULL, menu_item_0_launch },
+    { "Launch Glitcher " RG_VERSION, NULL, menu_item_0_launch },
     { "Found glitches", get_label_found_glitches, menu_item_open_found_glitches },
     { "Options", NULL, menu_item_open_options }
 };
@@ -128,7 +126,7 @@ static rom_glitcher_menu_items_t menu_options[] = {
     { "Load state", NULL, game_load_state },
     { "Save state", NULL, game_save_state },
     { "Reset game", NULL, game_reset },
-    { "Pause effect // " RG_VERSION " //", NULL, menu_item_pause_effect }
+    { "Pause effect", NULL, menu_item_pause_effect }
 };
 
 static rom_glitcher_menu_items_t menu_list[] = {
@@ -475,7 +473,7 @@ static void menu_show(void) {
     if (!menu_visible || !menu.current || !environ_cb) 
         return;
 
-    char menu_text[128] = {0}; // <= 128 !
+    char menu_text[128] = { 0 };
 
     for (int i = 0; i < menu.current->item_count; i++) {
         const char* label = menu.current->items[i].get_label ? menu.current->items[i].get_label() : menu.current->items[i].label;
@@ -483,18 +481,23 @@ static void menu_show(void) {
         if (label[0]) {
             char buf[64];
             snprintf(buf, sizeof(buf), " %s %s\n", (i == menu.current->selected_index) ? "<>" : " .  ", label);
-            strcat(menu_text, buf);
+            //strcat(menu_text, buf);
+            strncat(menu_text, buf, sizeof(menu_text) - strlen(menu_text) - 1);
         }
     }
 
+    uint8_t len = strlen(menu_text);
+    while (len < 120)
+        menu_text[len++] = ' ';
+
     struct retro_message_ext msg = {
-        .msg = menu_text,                           // текст сообщения <= 128 !
-        .duration = SHOW_MENU_IN_SECONDS * 1000,    // время отображения в мс
-        .priority = 2,                              // приоритет очереди отображения
-        .level = RETRO_LOG_DEBUG,                   // уровень сообщения
-        .target = RETRO_MESSAGE_TARGET_OSD,         // только на экран
-        .type = RETRO_MESSAGE_TYPE_STATUS,          // тип (в каком месте экрана выводится)
-        .progress = -1                              // прогресс бар
+        .msg = menu_text,                   // текст сообщения < 128 !
+        .duration = SHOW_MENU_DELAY * 1000, // время отображения в мс
+        .priority = 2,                      // приоритет очереди отображения
+        .level = RETRO_LOG_INFO,            // уровень сообщения
+        .target = RETRO_MESSAGE_TARGET_OSD, // только на экран
+        .type = RETRO_MESSAGE_TYPE_STATUS,  // тип (в каком месте экрана выводится)
+        .progress = -1                      // прогресс бар
     };
 
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
@@ -504,7 +507,7 @@ static void menu_show(void) {
         rg_main.total_glitch_count, (rg_main.range_size > 0) ? ((rg_main.range_size * 1000) / rg_main.glitch_count) / 10 : 0,
         (rg_main.range_size > 0) ? ((rg_main.range_size * 1000) / rg_main.glitch_count) % 10 : 0, rg_main.range_start, rg_main.range_size);
 
-    struct retro_message msg_under = { log_text, SHOW_MENU_IN_SECONDS * g_fps }; // {текст, время отображения в кадрах}
+    struct retro_message msg_under = { log_text, SHOW_MENU_DELAY * g_fps }; // {текст, время отображения в кадрах}
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_under);
     memset(log_text, 0, sizeof(log_text));
 }
