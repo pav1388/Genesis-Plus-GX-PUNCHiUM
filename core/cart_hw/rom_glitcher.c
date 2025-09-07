@@ -118,14 +118,14 @@ static rom_glitcher_menu_items_t menu_launch[] = {
 static rom_glitcher_menu_items_t menu_main[] = {
     { "BUG NOT_FOUND FOUND Step_back", get_label_main, NULL },
     { "Reset current search", NULL, rg_reset },
+    { "Found glitches", get_label_found_glitches, menu_item_open_found_glitches },
     { "Options", NULL, menu_item_open_options }
 };
 
 static rom_glitcher_menu_items_t menu_options[] = {
-    { "Found glitches", get_label_found_glitches, menu_item_open_found_glitches },
     { "Load state", NULL, game_load_state },
     { "Save state", NULL, game_save_state },
-    { "Reset game", NULL, game_reset },
+    //{ "Reset game", NULL, game_reset },
     { "Pause effect", NULL, menu_item_pause_effect }
 };
 
@@ -480,8 +480,7 @@ static void menu_show(void) {
 
         if (label[0]) {
             char buf[64];
-            snprintf(buf, sizeof(buf), " %s %s\n", (i == menu.current->selected_index) ? "<>" : " .  ", label);
-            //strcat(menu_text, buf);
+            snprintf(buf, sizeof(buf), "%s %s\n", (i == menu.current->selected_index) ? "<>" : "  . ", label);
             strncat(menu_text, buf, sizeof(menu_text) - strlen(menu_text) - 1);
         }
     }
@@ -514,16 +513,17 @@ static void menu_show(void) {
 
 // cкрыть меню
 static void menu_hide(void) {
+    menu.current = NULL;
     menu_visible = false;
     if (environ_cb) {
-        struct retro_message clear_msg_under = { " ", 1};
-        environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &clear_msg_under);
-
         struct retro_message_ext clear_msg = {
-            .msg = "", .duration = 1, .priority = 10, .level = RETRO_LOG_DEBUG,
+            .msg = " ", .duration = 1, .priority = 5, .level = RETRO_LOG_INFO,
             .target = RETRO_MESSAGE_TARGET_OSD, .type = RETRO_MESSAGE_TYPE_STATUS,
             .progress = -1 };
         environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &clear_msg);
+
+        struct retro_message clear_msg_under = { " ", 1 };
+        environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &clear_msg_under);
     }
 }
 
@@ -974,7 +974,6 @@ static void rg_reset(void) {
 // очистка памяти при закрытии ядра
 void rg_deinit(void) {
     menu_hide();
-    menu.current = NULL; 
     
     if (rg_main.glitches) {
         free(rg_main.glitches);
@@ -1214,7 +1213,6 @@ static void show_notification(const char* s, uint8_t context) {
 // сброс игры
 static void game_reset(void) {
     menu_hide();
-    menu.current = NULL;
     retro_unload_game();
     retro_load_game(rg_last_game);
 }
