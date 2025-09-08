@@ -34,7 +34,7 @@ static void menu_hide(void);
 static void menu_show(void);
 
 static void apply_glitches(void);
-static void create_search_backup(void);
+static void create_step_backup(void);
 static void restore_instructions(void);
 static void shuffle_instructions(void);
 static void inversion_instructions(void);
