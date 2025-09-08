@@ -1,9 +1,8 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION              "v0.1.8"
-#define RANDOM_SEED             1
-#define MAX_BACKUP_SLOTS        99 // для 10 000 кандидатов ~6 Мб ОЗУ
+#define RG_VERSION              "v0.1.9b"
+#define MAX_BACKUP_SLOTS        99 // 99 шагов * 10 000 кандидатов = ~7 Мб ОЗУ
 #define MAX_FOUND_GLITCH_SLOTS  7 // <= 7 !
 #define MAX_REPLAY_FRAMES       3600 // 60 FPS * 60 sec
 #define MAX_REPLAY_GAMEPAD      2
@@ -18,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     uint32_t address;
@@ -198,10 +198,6 @@ static void menu_item_pause_effect(void) { // выбрать эффект при
 }
 
 static void menu_item_open_found_glitches(void) { // открыть список найденных глитчей
-    if (!found_glitches.virt_address[0]) {
-        show_notification("Glitches NOT found ... yet", MSG_ERROR);
-        return;
-    }
     menu.current = &menu.list;
 }
 
@@ -264,7 +260,9 @@ static void menu_item_0_launch(void) { // действие 0 "Launch Glitcher"
 }
 
 static void menu_item_1_bug(void) { // действие 1 "Bug"
-    create_step_backup();
+    if (!rg_main.localizing)
+        create_step_backup();
+
     restore_instructions();
 
     if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
@@ -294,7 +292,9 @@ static void menu_item_1_bug(void) { // действие 1 "Bug"
 }
 
 static void menu_item_2_not_found(void) { // действие 2 "Not found"
-    create_step_backup();
+    if (!rg_main.localizing)
+        create_step_backup();
+    
     restore_instructions();
 
     if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
@@ -346,6 +346,9 @@ static void menu_item_3_found(void) { // действие 3 "Found"
         //сохранение_поиска(); // нет реализации !!!
     }
 
+    if (!rg_main.localizing)
+        create_step_backup();
+
     if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
         // глитч найден
         uint8_t idx;
@@ -392,7 +395,6 @@ static void menu_item_3_found(void) { // действие 3 "Found"
             found_glitches.count, rg_main.step_count, found_glitches.real_address[found_glitches.count - 1]);
         show_notification(temp, MSG_FOUND);
         rg_reset();
-        return;
     }
     else {
         restore_instructions();
@@ -413,11 +415,10 @@ static void menu_item_3_found(void) { // действие 3 "Found"
                 rg_main.range_size = rg_main.glitch_count;
 
         rg_main.range_size -= rg_main.range_size / 2;
+        rg_main.step_count++;
+        inversion_instructions();
+        game_reset();
     }
-
-    rg_main.step_count++;
-    inversion_instructions();
-    game_reset();
 }
 
 static void menu_item_4_step_back(void) { // действие 4 "Step back"
@@ -825,6 +826,10 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     int32_t target_addr = 0;
     uint32_t trim = rom_has_header ? 0 : 0x200;
 
+#if COMPRESSED_OPCODE_TABLE
+    init_m68k_opcode_valid();
+#endif
+
     for (uint32_t byte_addr = trim; byte_addr + 1 < rom_size; byte_addr += 2) {
         high_byte = rom_data[byte_addr];
 
@@ -852,23 +857,21 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             if ((disp16 & 1) != 0)
                 continue;
 
-            if (disp16 == 0)
-                continue;
-
+            /*if (disp16 == 0)
+                continue;*/
+             
             target_addr = byte_addr + 2 + (int16_t)disp16;
         }
 
-        if (target_addr < (int32_t)trim || target_addr >= (int32_t)rom_size) 
+        if (target_addr < (int32_t)trim || (target_addr + 1) >= (int32_t)rom_size) 
             continue;
 
         // Проверка данных по целевому адресу на легальность для M68K
-        uint16_t target_opcode = (rom_data[target_addr] << 8) | rom_data[target_addr + 1];
-
-        if ((target_opcode & 0b1111000000000000) == 0b1010000000000000 ||   // 1010xxxx xxxxxxxx
-            (target_opcode & 0b1111000000000000) == 0b1111000000000000 ||   // 1111xxxx xxxxxxxx
-            (target_opcode & 0b1111000100000000) == 0b0111000100000000 ||   // 0111xxx1 xxxxxxxx
-            (target_opcode & 0b1111111111111000) == 0b0100111001111000 ||   // 01001110 01111xxx
-            (target_opcode & 0b1111111111111111) == 0b0100111001110100)     // 01001110 01110100
+#if COMPRESSED_OPCODE_TABLE
+        if (!m68k_opcode_valid((rom_data[target_addr] << 8) | rom_data[target_addr + 1]))
+#else
+        if (!m68k_opcode_valid_table[(rom_data[target_addr] << 8) | rom_data[target_addr + 1]])
+#endif
             continue;
 
         // Правдоподобная BEQ/BNE инструкция

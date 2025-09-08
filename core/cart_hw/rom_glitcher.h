@@ -4,6 +4,8 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
+#define RANDOM_SEED             1
+#define COMPRESSED_OPCODE_TABLE 1
 #define RG_DISABLED_KEY -2 // random number that is not gamepad button
 
 #include "shared.h"
@@ -17,6 +19,12 @@ extern retro_log_printf_t log_cb;
 extern retro_input_poll_t input_poll_cb;
 extern retro_input_state_t input_state_cb;
 extern retro_environment_t environ_cb;
+#if COMPRESSED_OPCODE_TABLE
+extern void init_m68k_opcode_valid(void);
+extern bool m68k_opcode_valid(uint16_t opcode);
+#else
+extern const bool m68k_opcode_valid[0x10000];
+#endif
 
 static const char* get_label_found_glitches(void);
 static const char* get_label_menu_list(void);
