@@ -32,17 +32,19 @@ static const char* get_label_main(void);
 static void menu_item_activate_selected_glitch(void);
 static void menu_item_open_options(void);
 static void menu_item_pause_effect(void);
+static void menu_item_open_found_glitches(void);
+static void menu_item_game_save_state(void);
 static void menu_item_0_launch(void);
 static void menu_item_1_bug(void);
 static void menu_item_2_not_found(void);
 static void menu_item_3_found(void);
 static void menu_item_4_step_back(void);
-static void menu_item_open_found_glitches(void);
 static void menu_hide(void);
 static void menu_show(void);
 
 static void apply_glitches(void);
 static void create_step_backup(void);
+static void step_back_before_local(void);
 static void restore_instructions(void);
 static void shuffle_instructions(void);
 static void inversion_instructions(void);
@@ -53,6 +55,7 @@ static void game_load_state(void);
 static uint32_t xorshift(uint32_t* state);
 static uint16_t get_rom_checksum(uint8* rom, int size);
 static uint32_t virt_rom_to_real_rom_offset(uint32_t address);
+static uint32_t real_rom_to_virt_rom_offset(uint32_t address);
 static uint8_t save_glitch_as_cheat_to_file(uint32_t virt_address,
     uint32_t real_address, uint8_t intial_value, uint8_t mod_value);
 static void rg_reset(void);

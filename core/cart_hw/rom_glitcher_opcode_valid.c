@@ -4,12 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#ifndef COMPRESSED_OPCODE_TABLE
-#error "COMPRESSED_OPCODE_TABLE not defined!"
-#endif
-
 #if COMPRESSED_OPCODE_TABLE
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655294.html#msg1655294
+/* ... каждое значение представил битом в массиве байтов, 
+потом каждые 16 байт заменил на индекс из таблицы уникальных 16 байт ...*/
 
 const uint8_t table[][16] = {
 	{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
