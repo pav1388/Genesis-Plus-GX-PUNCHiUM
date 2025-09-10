@@ -1,9 +1,9 @@
 // rom_glitcher.c 
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION              "v0.2.1"
+#define RG_VERSION              "v0.2.2b"
 #define RANDOM_SEED             1
-#define MAX_BACKUP_SLOTS        99      // 100 steps * 10000 = ~7 Mb RAM
+#define MAX_BACKUP_SLOTS        99      // 100 steps * 10000 candidates = ~7 Mb RAM
 #define MAX_FOUND_GLITCH_SLOTS  7       // <= 7 !
 #define MAX_REPLAY_FRAMES       3600    // 60 FPS * 60 sec
 #define MAX_REPLAY_GAMEPAD      2
@@ -65,7 +65,7 @@ static struct {
     uint32_t real_address[MAX_FOUND_GLITCH_SLOTS];
     uint8_t initial_value[MAX_FOUND_GLITCH_SLOTS];
     uint8_t mod_value[MAX_FOUND_GLITCH_SLOTS];
-    bool activate[MAX_FOUND_GLITCH_SLOTS];
+    bool enabled[MAX_FOUND_GLITCH_SLOTS];
 } found_glitches;
 
 static struct {
@@ -130,9 +130,9 @@ static rom_glitcher_menu_items_t menu_main[] = {
 };
 
 static rom_glitcher_menu_items_t menu_options[] = {
-    { "Pause effect", NULL, menu_item_pause_effect },
-    { "Load state", NULL, game_load_state },
-    { "Save state", NULL, menu_item_game_save_state }
+    { "Save new state", NULL, menu_item_game_save_state },
+    { "Load last state", NULL, game_load_state },
+    { "Pause effect", NULL, menu_item_pause_effect }
 };
 
 static rom_glitcher_menu_items_t menu_list[] = {
@@ -158,23 +158,6 @@ static struct {
     .list = { menu_list, ARRAY_SIZE(menu_list), 0 }
 };
 
-static char dyn_list[MAX_FOUND_GLITCH_SLOTS][14];
-static const char* get_label_menu_list(void) { // пункты для меню найденных глитчей
-    static uint8_t i = 0;
-    uint8_t j = i;
-    i = (i + 1) % MAX_FOUND_GLITCH_SLOTS;
-
-    if (found_glitches.real_address[j]) {
-        snprintf(dyn_list[j], sizeof(dyn_list[j]), "0x%06X %s",
-            found_glitches.real_address[j],
-            found_glitches.activate[j] ? "ON" : "OFF");
-    }
-    else
-        snprintf(dyn_list[j], sizeof(dyn_list[j]), " - - -");
-
-    return dyn_list[j];
-}
-
 static char dyn_label1[64];
 static const char* get_label_main(void) {
     snprintf(dyn_label1, sizeof(dyn_label1), "[%s]Bug [%s]NOT found [%s]Found [%s]Step back:%u",
@@ -192,6 +175,24 @@ static const char* get_label_found_glitches(void) {
     return dyn_label2;
 }
 
+// пункты для меню найденных глитчей
+static char dyn_list[MAX_FOUND_GLITCH_SLOTS][14];
+static const char* get_label_menu_list(void) {
+    static uint8_t i = 0;
+    uint8_t j = i;
+    i = (i + 1) % MAX_FOUND_GLITCH_SLOTS;
+
+    if (found_glitches.real_address[j]) {
+        snprintf(dyn_list[j], sizeof(dyn_list[j]), "0x%06X %s",
+            found_glitches.real_address[j],
+            found_glitches.enabled[j] ? "ON" : "OFF");
+    }
+    else
+        snprintf(dyn_list[j], sizeof(dyn_list[j]), " - - -");
+
+    return dyn_list[j];
+}
+
 // активировать/деактивировать выбранный глитч
 static void menu_item_modified_selected_glitch(void) {
     if (!found_glitches.virt_address[menu.current->selected_index]) {
@@ -199,7 +200,7 @@ static void menu_item_modified_selected_glitch(void) {
         return;
     }
 
-    found_glitches.activate[menu.current->selected_index] = !found_glitches.activate[menu.current->selected_index];
+    found_glitches.enabled[menu.current->selected_index] = !found_glitches.enabled[menu.current->selected_index];
     found_glitches_modified = true;
 }
 
@@ -394,7 +395,7 @@ static void menu_item_3_found(void) { // действие 3 "Found"
                 found_glitches.virt_address[i - 1] = found_glitches.virt_address[i];
                 found_glitches.initial_value[i - 1] = found_glitches.initial_value[i];
                 found_glitches.real_address[i - 1] = found_glitches.real_address[i];
-                found_glitches.activate[i - 1] = found_glitches.activate[i];
+                found_glitches.enabled[i - 1] = found_glitches.enabled[i];
             }
             
             found_glitches.count = MAX_FOUND_GLITCH_SLOTS - 1;
@@ -403,7 +404,7 @@ static void menu_item_3_found(void) { // действие 3 "Found"
 
         found_glitches.initial_value[found_glitches.count] = rg_main.glitches[0].initial_value;
         found_glitches.mod_value[found_glitches.count] = rg_main.glitches[0].mod_value;
-        found_glitches.activate[found_glitches.count] = true;
+        found_glitches.enabled[found_glitches.count] = true;
         found_glitches.virt_address[found_glitches.count] = rg_main.glitches[0].address;
         found_glitches.real_address[found_glitches.count] = virt_rom_to_real_rom_offset(found_glitches.virt_address[found_glitches.count]);
         save_glitch_to_file(found_glitches.virt_address[found_glitches.count], found_glitches.real_address[found_glitches.count], found_glitches.initial_value[found_glitches.count], found_glitches.mod_value[found_glitches.count]);
@@ -825,12 +826,10 @@ static void apply_glitches(void) {
     for (uint32_t i = 0; i < rg_main.glitch_count; i++)
         cart.rom[rg_main.glitches[i].address] = rg_main.glitches[i].mod_value;
 
-    // применение активированных глитчей из списка найденных
-    /*for (uint8_t i = 0; i < MAX_FOUND_GLITCH_SLOTS; i++)
-        if (found_glitches.activate[i] && found_glitches.virt_address[i])
-            cart.rom[found_glitches.virt_address[i]] = found_glitches.mod_value[i];*/
+    // применение к ROM активированных глитчей из списка найденных
     for (uint8_t i = 0; i < found_glitches.count; i++)
-        cart.rom[found_glitches.virt_address[i]] = found_glitches.mod_value[i];
+        cart.rom[found_glitches.virt_address[i]] =
+            found_glitches.enabled[i] ? found_glitches.mod_value[i] : found_glitches.initial_value[i];
 
     // если заголовок не был удалён эмулятором
     if (!rom_has_header) {
@@ -1006,9 +1005,10 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         rg_main.init_done = false;
     }
 
-    // применение активированных глитчей из списка найденных
+    // применение глитчей из списка найденных
     for (uint8_t i = 0; i < found_glitches.count; i++)
-        cart.rom[found_glitches.virt_address[i]] = found_glitches.mod_value[i];
+        cart.rom[found_glitches.virt_address[i]] =
+            found_glitches.enabled[i] ? found_glitches.mod_value[i] : found_glitches.initial_value[i];
 
 #if (!RANDOM_SEED)
     rg_main.seed = 19881029;
@@ -1035,6 +1035,8 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     char tmp[64];
     snprintf(tmp, sizeof(tmp), "Candidates %u%s", rg_main.glitch_count, rg_main.init_done ? "" : ", NOT found");
     show_notification(tmp, rg_main.init_done ? MSG_INFO : MSG_ERROR);
+
+    
 }
 
 // сохранение предыдущего состояния отсеивания кандидатов
@@ -1073,7 +1075,7 @@ static void create_step_backup(void) {
 
 static void load_step_back_before_local(void) {
     // удаление последнего найденного глитча из бэкапа
-    if (!rg_backup_before_local.glitches || rg_backup_before_local.glitch_count == 0) {
+    /*if (!rg_backup_before_local.glitches || rg_backup_before_local.glitch_count == 0) {
         show_notification("Step 'before local' restore failed (no backup)", MSG_ERROR);
         return;
     }
@@ -1093,7 +1095,7 @@ static void load_step_back_before_local(void) {
 
             break;
         }
-    }
+    }*/
 
     // загрузка бэкапа
     rom_glitcher_t* slot = &rg_backup_before_local;
@@ -1202,31 +1204,31 @@ static uint32_t virt_rom_to_real_rom_offset(uint32_t address) {
 
 // Преобразование найденного адреса глитча из
 // реального ROM в виртуальный ROM эмулятора
-//                                                         НЕОБХОДИМА ОТЛАДКА !!!!!
 static uint32_t real_rom_to_virt_rom_offset(uint32_t address) {
-    uint32_t file_offset = address;
+    uint32_t virt_offset = address;
 
     if (rom_in_mdx)
-        file_offset -= 4;
+        virt_offset -= 4;
 
     if (rom_is_byte_swapped)
-        file_offset ^= 1;
+        virt_offset ^= 1;
 
     if (rom_has_header)
-        file_offset += 512;
+        virt_offset -= 512;
 
     if (rom_was_deinterleaved) {
-        uint32_t block = address / 0x4000;
-        uint32_t offset = address % 0x4000;
+        uint32_t block = virt_offset / 0x4000;
+        uint32_t offset = virt_offset % 0x4000;
 
-        if ((offset % 2) == 0)
-            file_offset = block * 0x4000 + 0x2000 + (offset / 2);
+        if (offset < 0x2000)
+            virt_offset = block * 0x4000 + (offset * 2 + 1);
         else
-            file_offset = block * 0x4000 + (offset / 2);
+            virt_offset = block * 0x4000 + ((offset - 0x2000) * 2);
     }
 
-    return file_offset;
+    return virt_offset;
 }
+
 
 // сохранения файла с читами в папку с ROM
 static uint8_t save_glitch_to_file(uint32_t virt_address, uint32_t real_address, uint8_t initial_value, uint8_t mod_value) {
