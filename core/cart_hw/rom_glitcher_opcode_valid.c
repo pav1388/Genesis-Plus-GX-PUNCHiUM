@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#if !(COMPRESSED_OPCODE_TABLE)
+#warning NO COMPRESSED_OPCODE_TABLE
+#endif
+
 #if COMPRESSED_OPCODE_TABLE
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655294.html#msg1655294
 /* ... каждое значение представил битом в массиве байтов, 
@@ -8286,4 +8290,4 @@ const bool m68k_opcode_valid_table[0x10000] = {
 	false, false, false, false, false, false, false, false,
 	false, false, false, false, false, false, false, false
 };
-#endif // COMPRESSED_TABLE
+#endif // COMPRESSED_OPCODE_TABLE
