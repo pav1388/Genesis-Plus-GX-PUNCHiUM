@@ -4,11 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#if !(COMPRESSED_OPCODE_TABLE)
-#warning NO COMPRESSED_OPCODE_TABLE
-#endif
-
-#if COMPRESSED_OPCODE_TABLE
+#ifdef COMPRESSED_OPCODE_TABLE
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655294.html#msg1655294
 /* ... каждое значение представил битом в массиве байтов, 
 потом каждые 16 байт заменил на индекс из таблицы уникальных 16 байт ...*/

@@ -4,7 +4,6 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define COMPRESSED_OPCODE_TABLE 1
 #define RG_DISABLED_KEY -2 // random number that is not gamepad button
 
 #include "shared.h"
@@ -18,22 +17,27 @@ extern retro_log_printf_t log_cb;
 extern retro_input_poll_t input_poll_cb;
 extern retro_input_state_t input_state_cb;
 extern retro_environment_t environ_cb;
-#if COMPRESSED_OPCODE_TABLE
+
+#ifdef COMPRESSED_OPCODE_TABLE
 extern void init_m68k_opcode_valid(void);
 extern bool m68k_opcode_valid(uint16_t opcode);
 #else
-extern const bool m68k_opcode_valid[0x10000];
+extern const bool m68k_opcode_valid_table[0x10000];
 #endif // COMPRESSED_OPCODE_TABLE
 
-static const char* get_label_list_of_found(void);
-static const char* get_label_menu_list(void);
 static const char* get_label_main(void);
+static const char* get_label_list_of_found(void);
+static const char* get_label_branch_allowed(void);
+static const char* get_label_menu_list_of_found(void);
+static const char* get_label_menu_branch_allowed(void);
 static void menu_item_modified_selected_glitch(void);
+static void menu_item_branch_allowed(void);
 static void menu_item_prev_page(void);
 static void menu_item_next_page(void);
 static void menu_item_open_options(void);
 static void menu_item_pause_effect(void);
 static void menu_item_open_list_of_found(void);
+static void menu_item_open_branch_allowed(void);
 static void menu_item_game_save_state(void);
 static void menu_item_0_launch(void);
 static void menu_item_1_bug(void);
