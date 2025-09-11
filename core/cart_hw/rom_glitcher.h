@@ -25,23 +25,25 @@ extern bool m68k_opcode_valid(uint16_t opcode);
 extern const bool m68k_opcode_valid[0x10000];
 #endif // COMPRESSED_OPCODE_TABLE
 
-static const char* get_label_found_glitches(void);
+static const char* get_label_list_of_found(void);
 static const char* get_label_menu_list(void);
 static const char* get_label_main(void);
 static void menu_item_modified_selected_glitch(void);
+static void menu_item_prev_page(void);
+static void menu_item_next_page(void);
 static void menu_item_open_options(void);
 static void menu_item_pause_effect(void);
-static void menu_item_open_found_glitches(void);
+static void menu_item_open_list_of_found(void);
 static void menu_item_game_save_state(void);
 static void menu_item_0_launch(void);
 static void menu_item_1_bug(void);
 static void menu_item_2_not_found(void);
 static void menu_item_3_found(void);
 static void menu_item_4_step_back(void);
-static void menu_hide(void);
 static void menu_show(void);
 
 static void apply_glitches(void);
+static void apply_found_glitches(void);
 static void create_step_backup(void);
 static void load_step_back_before_local(void);
 static void current_search_end(void);
@@ -63,6 +65,7 @@ static int16_t hook_input_state_cb(unsigned port, unsigned device, unsigned inde
 
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
+void rg_menu_hide(void);
 void rg_input_processing(void);
 void rg_set_rom_in_mdx(void);
 void rg_set_rom_is_byte_swapped(void);

@@ -3669,6 +3669,7 @@ void retro_deinit(void)
 
 void retro_reset(void)
 {
+    rg_menu_hide();
 #ifdef HAVE_OVERCLOCK
    overclock_delay = OVERCLOCK_FRAME_DELAY;
    update_overclock();
