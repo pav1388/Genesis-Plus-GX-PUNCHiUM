@@ -7,9 +7,12 @@
 #define RG_DISABLED_KEY -2 // random number that is not gamepad button
 
 #include "shared.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 extern const struct retro_game_info* rg_last_game; // info to reload current game
-extern int32_t rg_menu_button; // menu call button
+extern int32_t rg_menu_button;
+extern bool rg_swap_buttons;
 extern bool libretro_supports_bitmasks;
 extern char g_rom_dir[256];
 extern char g_rom_name[256];
@@ -45,7 +48,6 @@ static void menu_item_2_not_found(void);
 static void menu_item_3_found(void);
 static void menu_item_4_step_back(void);
 static void menu_show(void);
-
 static void apply_glitches(void);
 static void apply_found_glitches(void);
 static void create_step_backup(void);
@@ -60,7 +62,7 @@ static void game_reset(void);
 static void game_save_state(void);
 static void game_load_state(void);
 static uint32_t xorshift(uint32_t* state);
-static uint16_t get_rom_checksum(uint8* rom, int size);
+static uint16_t get_rom_checksum(uint8_t* rom, uint32_t size);
 static uint32_t virt_rom_to_real_rom_offset(uint32_t address);
 static uint32_t real_rom_to_virt_rom_offset(uint32_t address);
 static uint8_t save_glitch_to_file(uint32_t virt_address,

@@ -1536,7 +1536,17 @@ static void check_variables(bool first_run)
     }
   }
 
-var.key = "rom_glitcher_menu_button";
+
+  var.key = "rom_glitcher_swap_buttons";
+  environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
+  {
+      if (var.value && !strcmp(var.value, "enabled"))
+          rg_swap_buttons = true;
+      else
+          rg_swap_buttons = false;
+  }
+
+  var.key = "rom_glitcher_menu_button";
   environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var);
 
   if (var.value)
@@ -1572,13 +1582,13 @@ var.key = "rom_glitcher_menu_button";
       else if (!strcmp(var.value, "START"))
           rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_START);
       else if (!strcmp(var.value, "A"))
-          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_A);
+          rg_menu_button = rg_swap_buttons ? (1 << RETRO_DEVICE_ID_JOYPAD_B) : (1 << RETRO_DEVICE_ID_JOYPAD_A);
       else if (!strcmp(var.value, "B"))
-          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_B);
+          rg_menu_button = rg_swap_buttons ? (1 << RETRO_DEVICE_ID_JOYPAD_A) : (1 << RETRO_DEVICE_ID_JOYPAD_B);
       else if (!strcmp(var.value, "Y"))
-          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_Y);
+          rg_menu_button = rg_swap_buttons ? (1 << RETRO_DEVICE_ID_JOYPAD_X) : (1 << RETRO_DEVICE_ID_JOYPAD_Y);
       else if (!strcmp(var.value, "X"))
-          rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_X);
+          rg_menu_button = rg_swap_buttons ? (1 << RETRO_DEVICE_ID_JOYPAD_Y) : (1 << RETRO_DEVICE_ID_JOYPAD_X);
       else if (!strcmp(var.value, "UP"))
           rg_menu_button = (1 << RETRO_DEVICE_ID_JOYPAD_UP);
       else if (!strcmp(var.value, "DOWN"))

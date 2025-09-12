@@ -1,7 +1,7 @@
 // rom_glitcher.c
 // perfect_genius - glitcher idea, pav13 - implementation
 
-#define RG_VERSION                  "v0.2.2"
+#define RG_VERSION                  "v0.2.3"
 #define MAX_BACKUP_SLOTS            77      // 100 steps * 10000 candidates = ~7 Mb RAM
 #define MAX_FOUND_GLITCH_SLOTS      120
 #define MAX_FOUND_GLITCH_PER_PAGE   6
@@ -85,6 +85,7 @@ static struct {
 } input_replay;
 
 int32_t rg_menu_button = RG_DISABLED_KEY;
+bool rg_swap_buttons = false;
 static uint8_t game_state_buffer[STATE_SIZE];
 static bool need_load_state = false;
 //static bool step_back_without_replay = false;
@@ -131,8 +132,8 @@ static rom_glitcher_menu_items_t menu_launch[] = {
 
 static rom_glitcher_menu_items_t menu_main[] = {
     { "BUG NOT_FOUND FOUND Step_back", get_label_main, NULL },
-    { "Stop Glitcher", NULL, current_search_stop },
     { "List of found", get_label_list_of_found, menu_item_open_list_of_found },
+    { "Stop Glitcher", NULL, current_search_stop },
     { "Options", NULL, menu_item_open_options }
 };
 
@@ -182,10 +183,10 @@ static struct {
 static char dyn_label_main[64];
 static const char* get_label_main(void) {
     snprintf(dyn_label_main, sizeof(dyn_label_main), "[%s]Bug [%s]NOT found [%s]Found [%s]Step back:%u",
-        button_states[4].was_pressed ? "#" : "  ",
-        button_states[5].was_pressed ? "#" : "  ",
-        button_states[3].was_pressed ? "#" : "  ",
-        button_states[6].was_pressed ? "#" : "  ",
+        button_states[4].was_pressed ? "#" : "B",
+        button_states[5].was_pressed ? "#" : "X",
+        button_states[3].was_pressed ? "#" : "A",
+        button_states[6].was_pressed ? "#" : "Y",
         rg_backup_count);
     return dyn_label_main;
 }
@@ -785,10 +786,14 @@ void rg_input_processing(void) {
     if (menu_visible || input_replay.play) {
         bool prev_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_UP) & 1;
         bool next_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_DOWN) & 1;
-        bool confirm_found_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_A) & 1;
-        bool cancel_bug_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_B) & 1;
-        bool not_found_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_X) & 1;
-        bool step_back_key = (current_mask[0] >> RETRO_DEVICE_ID_JOYPAD_Y) & 1;
+        bool confirm_found_key = (current_mask[0] >>
+            (rg_swap_buttons ? RETRO_DEVICE_ID_JOYPAD_B : RETRO_DEVICE_ID_JOYPAD_A)) & 1;
+        bool cancel_bug_key = (current_mask[0] >>
+            (rg_swap_buttons ? RETRO_DEVICE_ID_JOYPAD_A : RETRO_DEVICE_ID_JOYPAD_B)) & 1;
+        bool not_found_key = (current_mask[0] >>
+            (rg_swap_buttons ? RETRO_DEVICE_ID_JOYPAD_Y : RETRO_DEVICE_ID_JOYPAD_X)) & 1;
+        bool step_back_key = (current_mask[0] >>
+            (rg_swap_buttons ? RETRO_DEVICE_ID_JOYPAD_X : RETRO_DEVICE_ID_JOYPAD_Y)) & 1;
 
         // ----------------- prev_key -----------------
         if (!prev_key && button_states[1].was_pressed && !button_states[1].is_processed) {
@@ -902,7 +907,7 @@ void rg_input_processing(void) {
     menu_show();
 }
 
-static uint16_t get_rom_checksum(uint8* rom, int size) {
+static uint16_t get_rom_checksum(uint8_t* rom, uint32_t size) {
     uint16_t checksum = 0;
 
     for (int i = 0; i < size; i += 2) {
@@ -1065,7 +1070,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 #endif // COMPRESSED_OPCODE_TABLE
 
         // Пропуск адреса уже найденного глитча
-        bool skip = false;
+        /*bool skip = false;
         for (uint8_t i = 0; i < found_glitches.count; i++)
             if (byte_addr == found_glitches.virt_address[i]) {
                 skip = true;
@@ -1073,7 +1078,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
             }
 
         if (skip)
-            continue;
+            continue;*/
 
         // Правдоподобная BEQ/BNE инструкция
         if (rg_main.glitch_count >= capacity) {
@@ -1185,7 +1190,7 @@ static void create_step_backup(void) {
 static void load_step_back_before_local(void) {
     uint32_t found_address = found_glitches.virt_address[found_glitches.count - 1];
 
-    // удаление последнего найденного глитча из бэкапа до локализации
+    // удаление последней найденной инструкции из бэкапа до локализации
     if (!rg_backup_before_local.glitches || rg_backup_before_local.glitch_count == 0) {
         show_notification("Step 'before local' restore failed (no backup)", MSG_ERROR);
         return;
@@ -1208,8 +1213,8 @@ static void load_step_back_before_local(void) {
         }
     }
 
-    // удаление последнего найденного глитча из всех остальных бэкапов
-    for (uint8_t slot = 0; slot < rg_backup_count; slot++) {
+    // удаление последней найденной инструкции из всех остальных бэкапов
+    /*for (uint8_t slot = 0; slot < rg_backup_count; slot++) {
         rom_glitcher_t* backup = &rg_backup[slot];
 
         for (uint32_t i = 0; i < backup->glitch_count; i++) {
@@ -1232,7 +1237,7 @@ static void load_step_back_before_local(void) {
                 break;
             }
         }
-    }
+    }*/
 
     // загрузка бэкапа
     rom_glitcher_t* slot = &rg_backup_before_local;

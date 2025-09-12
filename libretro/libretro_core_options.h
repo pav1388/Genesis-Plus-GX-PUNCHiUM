@@ -96,7 +96,7 @@ struct retro_core_option_v2_category option_cats_us[] = {
 struct retro_core_option_v2_definition option_defs_us[] = {
    {
       "rom_glitcher_menu_button",
-      "ROM Glitcher (Menu Button)",
+      "ROM Glitcher (Menu button)",
       NULL,
       "Button to show menu of ROM Glitcher",
       NULL,
@@ -134,6 +134,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
          { NULL, NULL },
       },
       "SELECT"
+   },
+   {
+      "rom_glitcher_swap_buttons",
+      "ROM Glitcher (Swap action buttons)",
+      NULL,
+      "Swap action buttons A/B and X/Y",
+      NULL,
+      "hacks",
+      {
+         { "disabled", NULL },
+         { "enabled",  NULL },
+         { NULL, NULL },
+      },
+      "disabled"
    },
    {
       "genesis_plus_gx_system_hw",
