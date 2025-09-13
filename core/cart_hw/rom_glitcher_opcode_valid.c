@@ -1,15 +1,14 @@
 // rom_glitcher_opcode_valid.c
+// m680x0 opcode valid table from musashi
 
-#include "rom_glitcher.h"
-#include <stdbool.h>
-#include <stdint.h>
+#include "shared.h"
 
 #ifdef COMPRESSED_OPCODE_TABLE
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655294.html#msg1655294
 /* ... каждое значение представил битом в массиве байтов, 
 потом каждые 16 байт заменил на индекс из таблицы уникальных 16 байт ...*/
 
-const uint8_t table[][16] = {
+static const uint8_t table[][16] = {
 	{0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00},
 	{0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x1f,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x1f},
 	{0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff},
@@ -39,7 +38,7 @@ const uint8_t table[][16] = {
 	{0x00,0x00,0xff,0x00,0x00,0xff,0xff,0x0f,0x00,0x00,0xff,0x00,0x00,0xff,0xff,0x0f}
 };
 
-const uint8_t table2[512] = {
+static const uint8_t table2[512] = {
 	19,18,11, 3,19,18,11, 3,10,18,11, 3,10,18,11, 3,
 	21,10,11, 3,19,18,11, 3,10,18,11, 3, 0, 0,11, 3,
 	 8, 4, 4, 4, 8, 4, 4, 4, 8, 4, 4, 8, 8, 4, 4, 8,
@@ -74,9 +73,9 @@ const uint8_t table2[512] = {
 	 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-uint8_t m68k_opcode_valid_table[0x2000];
+static uint8_t m68k_opcode_valid_table[0x2000];
 
-void init_m68k_opcode_valid(void) {
+void rg_m68k_opcode_valid_init(void) {
 	for (int i = 0; i < 512; i++) {
 		int offset = i * 16;
 		for (int j = 0; j < 16; j++)
@@ -84,7 +83,7 @@ void init_m68k_opcode_valid(void) {
 	}
 }
 
-bool m68k_opcode_valid(uint16_t opcode) {
+bool rg_m68k_opcode_valid(uint16_t opcode) {
 	return ((m68k_opcode_valid_table[opcode >> 3]) & (1 << (opcode & 7))) != 0;
 }
 
@@ -92,7 +91,7 @@ bool m68k_opcode_valid(uint16_t opcode) {
 
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655231.html#msg1655231
 
-const bool m68k_opcode_valid_table[0x10000] = {
+const bool rg_m68k_opcode_valid_table[0x10000] = {
 	true, true, true, true, true, true, true, true,
 	false, false, false, false, false, false, false, false,
 	true, true, true, true, true, true, true, true,

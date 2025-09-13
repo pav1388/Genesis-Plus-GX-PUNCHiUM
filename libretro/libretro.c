@@ -3698,7 +3698,7 @@ void retro_run(void)
 
         rg_input_processing();
 
-        if (rg_get_menu_visible())
+        if (rg_menu_visible)
         {
             rg_handle_pause_frame(&pause_frame, &pause_frame_width, &pause_frame_height,
                 bitmap.data, vwidth, vheight, bitmap.pitch, bitmap.width);

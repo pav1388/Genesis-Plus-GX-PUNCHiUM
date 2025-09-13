@@ -637,6 +637,7 @@ int load_rom(char *filename)
     {
       /* default is Mega Drive / Genesis hardware (16-bit mode) */
       system_hw = SYSTEM_MD;
+      rg_rom_in_mdx = false;
 
       /* decode .MDX format */
       if (!memcmp("MDX", &extension[0], 3))
@@ -646,8 +647,10 @@ int load_rom(char *filename)
           cart.rom[i-4] = cart.rom[i] ^ 0x40;
         }
         size = size - 5;
-        rg_set_rom_in_mdx();
+        rg_rom_in_mdx = true;
       }
+
+      rg_rom_is_byte_swapped = false;
 
       /* auto-detect byte-swapped dumps */
       if (!memcmp((char *)(cart.rom + 0x100),"ESAGM GE ARDVI E", 16) ||
@@ -661,9 +664,11 @@ int load_rom(char *filename)
           cart.rom[i] = cart.rom[i+1];
           cart.rom[i+1] = temp;
         }
-        rg_set_rom_is_byte_swapped();
+        rg_rom_is_byte_swapped = true;
       }
     }
+
+    rg_rom_has_header = false;
 
     /* auto-detect 512 byte extra header */
     if (memcmp((char *)(cart.rom + 0x100), "SEGA", 4) && ((size / 512) & 1) && !(size % 512))
@@ -671,7 +676,8 @@ int load_rom(char *filename)
       /* remove header */
       size -= 512;
       memmove (cart.rom, cart.rom + 512, size);
-      rg_set_rom_has_header();
+      rg_rom_has_header = true;
+      rg_rom_was_deinterleaved = false;
 
       /* assume interleaved Mega Drive / Genesis ROM format (.smd) */
       if (system_hw == SYSTEM_MD)
@@ -680,7 +686,7 @@ int load_rom(char *filename)
         {
           deinterleave_block (cart.rom + (i * 0x4000));
         }
-        rg_set_rom_was_interleaved();
+        rg_rom_was_deinterleaved = true;
       }
     }
   }

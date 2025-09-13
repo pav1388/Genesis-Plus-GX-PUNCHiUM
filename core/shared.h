@@ -37,6 +37,8 @@
 #include "svp.h"
 #include "state.h"
 #include "rom_glitcher.h"
+#include "rom_glitcher_menu.h"
+#include "rom_glitcher_opcode_valid.h"
 
 #endif /* _SHARED_H_ */
 
