@@ -67,7 +67,17 @@ typedef struct {
     retro_input_state_t input_cb_copy;
 } rom_glitcher_input_replay_t;
 
+typedef struct {
+    uint8_t* data;
+    int width;
+    int height;
+    int pitch;
+    int vwidth;
+    int vheight;
+} rom_glitcher_bitmap_t;
+
 extern const struct retro_game_info* rg_last_game; // info to reload current game
+extern rom_glitcher_bitmap_t rg_bitmap;
 extern int32_t rg_menu_button;
 extern bool rg_swap_buttons;
 extern bool rg_menu_visible;
@@ -93,6 +103,7 @@ extern bool libretro_supports_bitmasks;
 extern char g_rom_dir[256];
 extern char g_rom_name[256];
 extern retro_log_printf_t log_cb;
+extern retro_video_refresh_t video_cb;
 extern retro_input_poll_t input_poll_cb;
 extern retro_input_state_t input_state_cb;
 extern retro_environment_t environ_cb;
@@ -104,7 +115,6 @@ void rg_instructions_inversion(void);
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
 void rg_force_stop_glitcher(void);
-void rg_handle_input(void);
 void rg_current_search_end(void);
 void rg_game_reset(void);
 void rg_game_save_state(void);
@@ -113,8 +123,7 @@ uint8_t rg_save_found_to_file(uint32_t virt_address,
     uint32_t real_address, uint8_t intial_value, uint8_t mod_value);
 uint32_t rg_virt_to_real_rom_offset(uint32_t address);
 uint32_t rg_real_to_virt_rom_offset(uint32_t address);
-void rg_handle_last_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
-    const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width);
+void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheight);
 
 #ifndef RANDOM_SEED
 #warning RANDOM_SEED not defined

@@ -149,7 +149,7 @@ static size_t g_rom_size      = 0;
 static char *save_dir         = NULL;
 
 retro_log_printf_t log_cb;
-static retro_video_refresh_t video_cb;
+retro_video_refresh_t video_cb;
 retro_input_poll_t input_poll_cb;
 retro_input_state_t input_state_cb;
 retro_environment_t environ_cb;
@@ -3692,30 +3692,10 @@ void retro_run(void)
     // ROM Glitcher
     if (rg_menu_button != RG_DISABLED_KEY)
     {
-        static void* pause_frame = NULL;
-        static int pause_frame_width = 0;
-        static int pause_frame_height = 0;
-
-        rg_handle_input();
+        rg_handle_input(&bitmap, &vwidth, &vheight);
 
         if (rg_menu_visible)
-        {
-            rg_handle_last_frame(&pause_frame, &pause_frame_width, &pause_frame_height,
-                bitmap.data, vwidth, vheight, bitmap.pitch, bitmap.width);
-
-            video_cb(pause_frame ? pause_frame : bitmap.data, vwidth, vheight, vwidth * (bitmap.pitch / bitmap.width));
             return;
-        }
-        else
-        {
-            if (pause_frame)
-            {
-                free(pause_frame);
-                pause_frame = NULL;
-                pause_frame_width = 0;
-                pause_frame_height = 0;
-            }
-        }
     }
 
    int do_skip = 0;

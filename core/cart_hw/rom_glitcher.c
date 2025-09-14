@@ -33,6 +33,7 @@ rom_glitcher_input_replay_t rg_input_replay = {
     .length = 0
 };
 
+rom_glitcher_bitmap_t rg_bitmap;
 rom_glitcher_t rg_backup[RG_MAX_BACKUP_SLOTS];
 rom_glitcher_t rg_backup_before_local;
 uint8_t rg_backup_index = 0;
@@ -62,6 +63,96 @@ static uint32_t xorshift(uint32_t* seed) {
     x ^= x >> 17;
     x ^= x << 5;
     return (*seed = x);
+}
+
+// применение эффекта к последнему кадру игры при вызове меню глитчера
+// (возможная будущая основа для "нового" меню)
+static void handle_pause_frame(void) {
+    static uint8_t old_pause_effect = 255;
+    static uint16_t* pause_frame = NULL;
+
+    if (rg_menu_visible) {
+        if (old_pause_effect != rg_pause_effect) {
+            if (pause_frame) {
+                free(pause_frame);
+                pause_frame = NULL;
+            }
+            old_pause_effect = rg_pause_effect;
+        }
+
+        if (rg_bitmap.data && !pause_frame) {
+            const size_t frame_size = rg_bitmap.vwidth * rg_bitmap.vheight * 2;
+
+            pause_frame = malloc(frame_size);
+            if (!pause_frame)
+                return;
+
+            const uint16_t* src_frame = (const uint16_t*)rg_bitmap.data;
+            //uint16_t* dst_frame = (uint16_t*)pause_frame;
+            const int src_pitch = rg_bitmap.pitch / 2;
+            const int dst_pitch = rg_bitmap.vwidth;
+
+            for (int y = 0; y < rg_bitmap.vheight; y++) {
+                const uint16_t* src_row = &src_frame[y * src_pitch];
+                //uint16_t* dst_row = &dst_frame[y * dst_pitch];
+                uint16_t* dst_row = pause_frame + y * dst_pitch;
+
+                for (int x = 0; x < rg_bitmap.vwidth; x++) {
+                    uint16_t pixel = src_row[x];
+                    uint8_t r = (pixel >> 11) & 0x1F;
+                    uint8_t g = (pixel >> 5) & 0x3F;
+                    uint8_t b = pixel & 0x1F;
+
+                    switch (rg_pause_effect) {
+                    case 0: // dark
+                        r >>= 2; g >>= 2; b >>= 2;
+                        break;
+
+                    case 1: // red glitch
+                        r = (r + 31) / 3;
+                        g >>= 2; b >>= 2;
+                        break;
+
+                    case 2: { // sepia
+                        uint8_t gray = (r + g + b) / 4;
+                        r = gray;
+                        g = (gray - (gray >> 2));
+                        b = (gray >> 1);
+                        break;
+                    }
+
+                    case 3: // yellow glitch
+                        r = r * 3 / 4;
+                        g = r;
+                        b = 0;
+                        break;
+
+                    case 4: { // color static
+                        uint8_t noise = xorshift(&rg_main.seed) % 25;
+                        r = (r > noise) ? (r - noise) * 3 / 4 : 1;
+                        g = (g > noise) ? (g - noise) * 3 / 4 : 1;
+                        b = (b > noise) ? (b - noise) * 3 / 4 : 1;
+                        break;
+                    }
+
+                    default: // no effect
+                        break;
+                    }
+
+                    dst_row[x] = (r << 11) | (g << 5) | b;
+                }
+            }
+        }
+
+        video_cb(pause_frame ? (uint8_t*)pause_frame : rg_bitmap.data, rg_bitmap.vwidth, rg_bitmap.vheight,
+            rg_bitmap.vwidth * 2);
+    }
+    else {
+        if (pause_frame) {
+            free(pause_frame);
+            pause_frame = NULL;
+        }
+    }
 }
 
 void rg_instructions_shuffle(void) {
@@ -158,9 +249,20 @@ static int16_t hook_input_state_cb(unsigned port, unsigned device, unsigned inde
 }
 
 // опрос кнопок геймпада и обработка ввода
-void rg_handle_input(void) {   
+void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheight) {
+    if (bitmap || bitmap->data) {
+        rg_bitmap.data = bitmap->data;
+        rg_bitmap.width = bitmap->width;
+        rg_bitmap.height = bitmap->height;
+        rg_bitmap.pitch = bitmap->pitch;
+        rg_bitmap.vwidth = *vwidth;
+        rg_bitmap.vheight = *vheight;
+    }
+
+    handle_pause_frame();
+
     if (!input_poll_cb || !input_state_cb)
-        return; 
+        return;
     
     if (need_load_state) {
         need_load_state = false;
@@ -954,89 +1056,6 @@ void rg_game_load_state(void) {
 
     if (!retro_unserialize(game_state_buffer, sizeof(game_state_buffer)))
         rg_msg("State NOT loaded", RG_MSG_ERROR);
-}
-
-// применение эффекта к последнему кадру игры при вызове меню глитчера
-// (возможная будущая основа для "нового" меню)
-void rg_handle_last_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
-    const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width) {
-    
-    static uint8_t old_pause_effect = 255;
-
-    if (bitmap_data && (!*pause_frame || vwidth != *pause_frame_width || vheight != *pause_frame_height)) {
-        if (*pause_frame) {
-            free(*pause_frame);
-            *pause_frame = NULL;
-        }
-
-        const int pixel_size = (bitmap_pitch / bitmap_width) > 2 ? 4 : 2;
-        *pause_frame = malloc(vwidth * vheight * pixel_size);
-        *pause_frame_width = vwidth;
-        *pause_frame_height = vheight;
-
-        if (!*pause_frame)
-            return;
-
-        // RGB565 (16 bit)
-        if (pixel_size == 2) {
-            const uint16_t* src_frame = (const uint16_t*)bitmap_data;
-            uint16_t* dst_frame = (uint16_t*)*pause_frame;
-
-            for (int y = 0; y < vheight; y++)
-            {
-                for (int x = 0; x < vwidth; x++)
-                {
-                    int src_idx = y * (bitmap_pitch / 2) + x;
-                    int dst_idx = y * vwidth + x;
-                    uint16_t pixel = src_frame[src_idx];
-
-                    uint8_t r = (pixel >> 11) & 0x1F;
-                    uint8_t g = (pixel >> 5) & 0x3F;
-                    uint8_t b = pixel & 0x1F;
-
-                    switch (rg_pause_effect) {
-                        case 0: // dark
-                            r >>= 2; g >>= 2; b >>= 2;
-                            break;
-
-                        case 1: // red glitch
-                            r = (r + 31) / 3;
-                            g >>= 2; b >>= 2;
-                            break;
-
-                        case 2: { // sepia
-                            uint8_t gray = (r + g + b) / 4;
-                            r = gray;
-                            g = (gray - (gray >> 2));
-                            b = (gray >> 1);
-                            break;
-                        }
-
-                        case 3: // yellow glitch
-                            r = r * 3 / 4;
-                            g = r;
-                            b = 0;
-                            break;
-
-                        case 4: { // color static
-                            uint8_t noise = xorshift(&rg_main.seed) % 25;
-                            r = (r > noise) ? (r - noise) * 3 / 4 : 1;
-                            g = (g > noise) ? (g - noise) * 3 / 4 : 1;
-                            b = (b > noise) ? (b - noise) * 3 / 4 : 1;
-                            break;
-                        }
-                    }
-
-                    dst_frame[dst_idx] = (r << 11) | (g << 5) | b;
-                }
-            }
-        }
-    }
-
-    if (old_pause_effect != rg_pause_effect) {
-        old_pause_effect = rg_pause_effect;
-        *pause_frame_width = 0; // котыль для мгновенной смены эффекта
-    }
 }
 
 /*if (log_cb) {
