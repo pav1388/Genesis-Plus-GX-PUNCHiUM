@@ -1,4 +1,7 @@
 // rom_glitcher.c
+
+// ROM Glitcher: Branch Inverter
+// 
 // perfect_genius - glitcher idea, pav13 - implementation
 // https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
 
@@ -155,7 +158,7 @@ static int16_t hook_input_state_cb(unsigned port, unsigned device, unsigned inde
 }
 
 // опрос кнопок геймпада и обработка ввода
-void rg_input_processing(void) {   
+void rg_handle_input(void) {   
     if (!input_poll_cb || !input_state_cb)
         return; 
     
@@ -174,7 +177,7 @@ void rg_input_processing(void) {
 
     input_poll_cb();
 
-    int16_t current_mask[RG_MAX_REPLAY_GAMEPAD] = { 0 };
+    int16_t current_mask[RG_MAX_REPLAY_GAMEPADS] = { 0 };
 
     // ----------------- rg_input_replay.record -----------------
     if (rg_input_replay.record) {
@@ -185,12 +188,12 @@ void rg_input_processing(void) {
         }
 
         if (libretro_supports_bitmasks)
-            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPAD; port++) {
+            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPADS; port++) {
                 current_mask[port] = input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
                 rg_input_replay.sequence[port][rg_input_replay.length++] = current_mask[port];
             }
         else
-            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPAD; port++)
+            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPADS; port++)
                 for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
                     if (input_state_cb(port, RETRO_DEVICE_JOYPAD, 0, id)) {
                         current_mask[port] |= (1 << id);
@@ -211,7 +214,7 @@ void rg_input_processing(void) {
                     current_mask[0] |= (1 << id);
         
         if (rg_input_replay.play_count < rg_input_replay.length) {
-            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPAD; port++)
+            for (uint8_t port = 0; port < RG_MAX_REPLAY_GAMEPADS; port++)
                 rg_input_replay.hook_mask[port] = rg_input_replay.sequence[port][rg_input_replay.play_count++];
             
             char tmp[6];
@@ -497,11 +500,11 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         high_byte = rom_data[byte_addr];
 
         // Ищем все branch инструкции
-        if (high_byte < 0x60 || high_byte > 0x6f)
+        if (high_byte < 0x62 || high_byte > 0x6f)
             continue;
 
         // Проверка битов на разрешение поиска конкретной пары инструкций
-        // 7:0x6E/6F, 6:0x6C/6D, 5:0x6A/6B, 4:0x68/69, 3:0x66/67, 2:0x64/65, 1:0x62/63, 0:0x60/61
+        // 7:0x6E/6F, 6:0x6C/6D, 5:0x6A/6B, 4:0x68/69, 3:0x66/67, 2:0x64/65, 1:0x62/63, не исп. 0:0x60/61
         if (!(rg_branch_allowed & (1 << ((high_byte - 0x60) >> 1))))
             continue;
 
@@ -955,9 +958,9 @@ void rg_game_load_state(void) {
 
 // применение эффекта к последнему кадру игры при вызове меню глитчера
 // (возможная будущая основа для "нового" меню)
-void rg_handle_pause_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
-    const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width)
-{
+void rg_handle_last_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
+    const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width) {
+    
     static uint8_t old_pause_effect = 255;
 
     if (bitmap_data && (!*pause_frame || vwidth != *pause_frame_width || vheight != *pause_frame_height)) {

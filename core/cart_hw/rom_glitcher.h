@@ -3,13 +3,13 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_VERSION                      "v0.2.4b"
+#define RG_VERSION "v0.2.4b"
 #define RG_DISABLED_KEY                 -2   // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             33   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       240
 #define RG_MAX_FOUND_GLITCH_PER_PAGE    6
 #define RG_MAX_REPLAY_FRAMES            3600 // 60 FPS * 60 sec
-#define RG_MAX_REPLAY_GAMEPAD           2
+#define RG_MAX_REPLAY_GAMEPADS          2
 
 #define RG_MSG_INFO        1
 #define RG_MSG_ERROR       2
@@ -62,8 +62,8 @@ typedef struct {
     bool play;
     uint16_t play_count;
     uint16_t length;
-    int16_t sequence[RG_MAX_REPLAY_GAMEPAD][RG_MAX_REPLAY_FRAMES];
-    int16_t hook_mask[RG_MAX_REPLAY_GAMEPAD];
+    int16_t sequence[RG_MAX_REPLAY_GAMEPADS][RG_MAX_REPLAY_FRAMES];
+    int16_t hook_mask[RG_MAX_REPLAY_GAMEPADS];
     retro_input_state_t input_cb_copy;
 } rom_glitcher_input_replay_t;
 
@@ -104,7 +104,7 @@ void rg_instructions_inversion(void);
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
 void rg_force_stop_glitcher(void);
-void rg_input_processing(void);
+void rg_handle_input(void);
 void rg_current_search_end(void);
 void rg_game_reset(void);
 void rg_game_save_state(void);
@@ -113,7 +113,7 @@ uint8_t rg_save_found_to_file(uint32_t virt_address,
     uint32_t real_address, uint8_t intial_value, uint8_t mod_value);
 uint32_t rg_virt_to_real_rom_offset(uint32_t address);
 uint32_t rg_real_to_virt_rom_offset(uint32_t address);
-void rg_handle_pause_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
+void rg_handle_last_frame(void** pause_frame, int* pause_frame_width, int* pause_frame_height,
     const void* bitmap_data, int vwidth, int vheight, int bitmap_pitch, int bitmap_width);
 
 #ifndef RANDOM_SEED

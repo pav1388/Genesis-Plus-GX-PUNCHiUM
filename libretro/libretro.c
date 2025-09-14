@@ -3696,11 +3696,11 @@ void retro_run(void)
         static int pause_frame_width = 0;
         static int pause_frame_height = 0;
 
-        rg_input_processing();
+        rg_handle_input();
 
         if (rg_menu_visible)
         {
-            rg_handle_pause_frame(&pause_frame, &pause_frame_width, &pause_frame_height,
+            rg_handle_last_frame(&pause_frame, &pause_frame_width, &pause_frame_height,
                 bitmap.data, vwidth, vheight, bitmap.pitch, bitmap.width);
 
             video_cb(pause_frame ? pause_frame : bitmap.data, vwidth, vheight, vwidth * (bitmap.pitch / bitmap.width));

@@ -8,7 +8,7 @@ static const char* get_label_branch_allowed(void);
 static const char* get_label_menu_list_of_found(void);
 static const char* get_label_menu_branch_allowed(void);
 static void menu_item_pause_effect(void);
-static void menu_item_modified_selected_glitch(void);
+static void menu_item_toggle_found_instruction(void);
 static void menu_item_branch_allowed(void);
 static void menu_item_prev_page(void);
 static void menu_item_next_page(void);
@@ -18,10 +18,10 @@ static void menu_item_open_branch_allowed(void);
 static void menu_item_game_save_state(void);
 static void menu_item_launch_glitcher(void);
 
-static bool refresh_log_string = true;
+static bool refresh_menu_log = true;
 static char dyn_label_main[64];
 static char dyn_label_list_of_found[32];
-static char dyn_label_branch_allowed[64];
+static char dyn_label_branch_allowed[32];
 static char dyn_label_menu_list_of_found[8][20];
 static char dyn_label_menu_branch_allowed[8][20];
 
@@ -46,17 +46,18 @@ static rom_glitcher_menu_item_t menu_options[] = {
 
 static rom_glitcher_menu_item_t menu_list[] = {
     { "prev", get_label_menu_list_of_found, menu_item_prev_page },
-    { "0x01", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
-    { "0x02", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
-    { "0x03", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
-    { "0x04", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
-    { "0x05", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
-    { "0x06", get_label_menu_list_of_found, menu_item_modified_selected_glitch },
+    { "1", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
+    { "2", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
+    { "3", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
+    { "4", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
+    { "5", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
+    { "6", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
     { "next", get_label_menu_list_of_found, menu_item_next_page }
 };
 
 static rom_glitcher_menu_item_t menu_branch[] = {
-    { "60/61", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BRA/BSR
+    { "- -", NULL, NULL },
+    //{ "60/61", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BRA/BSR
     { "62/63", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BHI/BLS
     { "64/65", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BCC/BCS
     { "66/67", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BNE/BEQ
@@ -71,7 +72,7 @@ rom_glitcher_menu_manager_t rg_menu = {
     .main = { menu_main, ARRAY_SIZE(menu_main), 0 },
     .options = { menu_options, ARRAY_SIZE(menu_options), 0 },
     .list = { menu_list, ARRAY_SIZE(menu_list), 1 },
-    .branch = { menu_branch, ARRAY_SIZE(menu_branch), 0 }
+    .branch = { menu_branch, ARRAY_SIZE(menu_branch), 3 }
 };
 
 static const char* get_label_main(void) {
@@ -156,7 +157,7 @@ static void menu_item_pause_effect(void) {
     rg_pause_effect = (rg_pause_effect + 1) % 5;
 }
 
-static void menu_item_modified_selected_glitch(void) {
+static void menu_item_toggle_found_instruction(void) {
     uint16_t index = rg_found_glitches.current_page * RG_MAX_FOUND_GLITCH_PER_PAGE 
         + (rg_menu.current->selected_index - 1);
 
@@ -464,8 +465,8 @@ void rg_menu_show(void) {
 
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
 
-    if (refresh_log_string) {
-        refresh_log_string = false;
+    if (refresh_menu_log) {
+        refresh_menu_log = false;
         char log_text[164];
         char branch_mode[64] = { 0 };
 
@@ -492,7 +493,7 @@ void rg_menu_hide(void) {
     }
 
     rg_menu_visible = false;
-    refresh_log_string = true;
+    refresh_menu_log = true;
 }
 
 // вывод информационных сообщений на экран
