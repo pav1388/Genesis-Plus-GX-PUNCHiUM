@@ -16,7 +16,6 @@ static void menu_item_open_options(void);
 static void menu_item_open_list_of_found(void);
 static void menu_item_open_branch_allowed(void);
 static void menu_item_game_save_state(void);
-static void menu_item_launch_glitcher(void);
 
 static bool refresh_menu_log = true;
 static char dyn_label_main[64];
@@ -26,12 +25,12 @@ static char dyn_label_menu_list_of_found[8][20];
 static char dyn_label_menu_branch_allowed[8][20];
 
 static rom_glitcher_menu_item_t menu_launch[] = {
-    { "Launch Glitcher " RG_VERSION, NULL, menu_item_launch_glitcher },
+    { "Launch Glitcher " RG_VERSION, NULL, rg_launch_glitcher },
     { "List of found", get_label_list_of_found, menu_item_open_list_of_found },
     { "Branch allowed", get_label_branch_allowed, menu_item_open_branch_allowed }
 };
 
-static rom_glitcher_menu_item_t menu_main[] = {
+static rom_glitcher_menu_item_t menu_search[] = {
     { "BUG NOT_FOUND FOUND Step_back", get_label_main, NULL },
     { "List of found", get_label_list_of_found, menu_item_open_list_of_found },
     { "Stop Glitcher", NULL, rg_force_stop_glitcher },
@@ -56,7 +55,7 @@ static rom_glitcher_menu_item_t menu_list[] = {
 };
 
 static rom_glitcher_menu_item_t menu_branch[] = {
-    { "- -", NULL, NULL },
+    { " -/-", get_label_menu_branch_allowed, NULL },
     //{ "60/61", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BRA/BSR
     { "62/63", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BHI/BLS
     { "64/65", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BCC/BCS
@@ -69,7 +68,7 @@ static rom_glitcher_menu_item_t menu_branch[] = {
 
 rom_glitcher_menu_manager_t rg_menu = {
     .launch = { menu_launch, ARRAY_SIZE(menu_launch), 0 },
-    .main = { menu_main, ARRAY_SIZE(menu_main), 0 },
+    .main = { menu_search, ARRAY_SIZE(menu_search), 0 },
     .options = { menu_options, ARRAY_SIZE(menu_options), 0 },
     .list = { menu_list, ARRAY_SIZE(menu_list), 1 },
     .branch = { menu_branch, ARRAY_SIZE(menu_branch), 3 }
@@ -92,10 +91,7 @@ static const char* get_label_list_of_found(void) {
 }
 
 static const char* get_label_branch_allowed(void) {
-    uint8_t pairs_count = ((rg_branch_allowed >> 0) & 1) + ((rg_branch_allowed >> 1) & 1)
-        + ((rg_branch_allowed >> 2) & 1) + ((rg_branch_allowed >> 3) & 1)
-        + ((rg_branch_allowed >> 4) & 1) + ((rg_branch_allowed >> 5) & 1)
-        + ((rg_branch_allowed >> 6) & 1) + ((rg_branch_allowed >> 7) & 1);
+    uint8_t pairs_count = __builtin_popcount(rg_branch_allowed);
     snprintf(dyn_label_branch_allowed, sizeof(dyn_label_branch_allowed), "Branch pairs allowed: %u/8", pairs_count);
     return dyn_label_branch_allowed;
 }
@@ -198,233 +194,6 @@ static void menu_item_game_save_state(void) {
     rg_input_replay.record = true;
     rg_input_replay.play = false;
     rg_input_replay.length = 0;
-}
-
-static void menu_item_launch_glitcher(void) {
-    if (rg_main.init_done) {
-        rg_game_save_state();
-        rg_main.launch = true;
-        rg_menu.main.selected_index = 0;
-        rg_menu.options.selected_index = 0;
-        rg_menu.current = &rg_menu.main;
-        rg_create_step_backup();
-        rg_instructions_shuffle();
-        rg_main.step_count++;
-        rg_instructions_inversion();
-        rg_input_replay.record = true;
-        rg_input_replay.play = false;
-        rg_input_replay.length = 0;
-    }
-    else
-        rg_msg("Candidates NOT found", RG_MSG_ERROR);
-}
-
-void menu_item_1_bug(void) {
-    rg_create_step_backup();
-    rg_instructions_restore();
-
-    if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
-        if (rg_main.range_size == 1) {
-            if (rg_main.localizing)
-                rg_msg("Glitch NOT found. Try again (#7)", RG_MSG_ERROR);
-            else
-                rg_msg("Glitch NOT found. Try again (#6)", RG_MSG_ERROR);
-
-            rg_current_search_end();
-            return;
-        }
-        else {
-            rg_main.range_start = 0;
-            rg_main.range_size -= rg_main.range_size / 2;
-
-            if (!rg_main.localizing)
-                rg_instructions_shuffle();
-        }
-    }
-    else
-        rg_main.range_start += rg_main.range_size;
-
-    rg_main.step_count++;
-    rg_instructions_inversion();
-    rg_game_reset();
-}
-
-void menu_item_2_not_found(void) {
-    rg_create_step_backup();
-    rg_instructions_restore();
-
-    if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
-        if (rg_main.range_size == 1 || rg_main.range_start == 0) {
-            if (rg_main.localizing)
-                rg_msg("Glitch NOT found. Try again (#9)", RG_MSG_ERROR);
-            else
-                rg_msg("Glitch NOT found. Try again (#8)", RG_MSG_ERROR);
-
-            rg_current_search_end();
-            return;
-        }
-        else {
-            rg_main.glitch_count = rg_main.range_start;
-            rg_main.range_start = 0;
-            rg_main.range_size -= rg_main.range_size / 2;
-
-            if (!rg_main.localizing)
-                rg_instructions_shuffle();
-        }
-    }
-    else {
-        uint32_t remove_size = rg_main.range_size;
-        if (rg_main.range_start + remove_size > rg_main.glitch_count) {
-            remove_size = rg_main.glitch_count - rg_main.range_start;
-        }
-
-        if (remove_size > 0) {
-            memmove(&rg_main.glitches[rg_main.range_start],
-                &rg_main.glitches[rg_main.range_start + remove_size],
-                (rg_main.glitch_count - rg_main.range_start - remove_size) * sizeof(rom_glitch_t));
-            rg_main.glitch_count -= remove_size;
-        }
-
-        if (rg_main.localizing)
-            rg_main.range_size -= rg_main.glitch_count / 2;
-    }
-
-    rg_main.step_count++;
-    rg_instructions_inversion();
-    rg_game_reset();
-}
-
-void menu_item_3_found(void) {
-
-    if (!rg_main.localizing) {
-        // отдельный бэкап перед локализацией
-        rom_glitcher_t* slot = &rg_backup_before_local;
-
-        if (slot->glitches) {
-            free(slot->glitches);
-            slot->glitches = NULL;
-        }
-
-        *slot = rg_main;
-
-        if (rg_main.glitch_count > 0 && rg_main.glitches) {
-            slot->glitches = malloc(sizeof(rom_glitch_t) * rg_main.glitch_count);
-            if (slot->glitches)
-                memcpy(slot->glitches, rg_main.glitches, sizeof(rom_glitch_t) * rg_main.glitch_count);
-            else {
-                slot->glitches = NULL;
-                slot->glitch_count = 0;
-            }
-        }
-        else
-            slot->glitches = NULL;
-
-        rg_main.localizing = true;
-    }
-
-    rg_create_step_backup();
-
-    if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
-        // глитч найден
-
-        // поиск дубликата в уже найденных глитчах
-        for (int i = 0; i < rg_found_glitches.count; i++) {
-            if (rg_main.glitches[0].address == rg_found_glitches.virt_address[i]) {
-                rg_current_search_end();
-                return;
-            }
-        }
-
-        // выбор слота для добавления глитча в список найденных
-        if (rg_found_glitches.count >= RG_MAX_FOUND_GLITCH_SLOTS) {
-            for (int i = 1; i < RG_MAX_FOUND_GLITCH_SLOTS; i++) {
-                rg_found_glitches.virt_address[i - 1] = rg_found_glitches.virt_address[i];
-                rg_found_glitches.initial_value[i - 1] = rg_found_glitches.initial_value[i];
-                rg_found_glitches.real_address[i - 1] = rg_found_glitches.real_address[i];
-                rg_found_glitches.enabled[i - 1] = rg_found_glitches.enabled[i];
-            }
-
-            rg_found_glitches.count = RG_MAX_FOUND_GLITCH_SLOTS - 1;
-            rg_msg("Slots are full. First glitch removed", RG_MSG_INFO);
-        }
-
-        rg_found_glitches.initial_value[rg_found_glitches.count] = rg_main.glitches[0].initial_value;
-        rg_found_glitches.mod_value[rg_found_glitches.count] = rg_main.glitches[0].mod_value;
-        rg_found_glitches.enabled[rg_found_glitches.count] = true;
-        rg_found_glitches.virt_address[rg_found_glitches.count] = rg_main.glitches[0].address;
-        rg_found_glitches.real_address[rg_found_glitches.count] = rg_virt_to_real_rom_offset(rg_found_glitches.virt_address[rg_found_glitches.count]);
-        rg_save_found_to_file(rg_found_glitches.virt_address[rg_found_glitches.count], rg_found_glitches.real_address[rg_found_glitches.count], rg_found_glitches.initial_value[rg_found_glitches.count], rg_found_glitches.mod_value[rg_found_glitches.count]);
-
-        rg_found_glitches.count++;
-        rg_found_glitches.total_pages =
-            (rg_found_glitches.count + RG_MAX_FOUND_GLITCH_PER_PAGE - 1) / RG_MAX_FOUND_GLITCH_PER_PAGE;
-
-        char temp[128];
-        snprintf(temp, sizeof(temp), "Glitch %u. Steps %u. Real ROM '0x%06X'. Virt ROM '%06X'",
-            rg_found_glitches.count, rg_main.step_count, rg_found_glitches.real_address[rg_found_glitches.count - 1],
-            rg_found_glitches.virt_address[rg_found_glitches.count - 1]);
-        rg_msg(temp, RG_MSG_FOUND);
-        rg_current_search_end();
-    }
-    else {
-        rg_instructions_restore();
-
-        if (rg_main.range_start > 0 && rg_main.range_start < rg_main.glitch_count) {
-            uint32_t remove_size = rg_main.range_start;
-            memmove(rg_main.glitches,
-                &rg_main.glitches[rg_main.range_start],
-                (rg_main.glitch_count - rg_main.range_start) * sizeof(rom_glitch_t));
-            rg_main.glitch_count -= remove_size;
-        }
-
-        rg_main.range_start = 0;
-
-        if (rg_main.range_size < rg_main.glitch_count)
-            rg_main.glitch_count = rg_main.range_size;
-        else if (rg_main.range_size > rg_main.glitch_count)
-            rg_main.range_size = rg_main.glitch_count;
-
-        rg_main.range_size -= rg_main.range_size / 2;
-        rg_main.step_count++;
-        rg_instructions_inversion();
-        rg_game_reset();
-    }
-}
-
-void menu_item_4_step_back(void) { // действие 4 "Step back"
-    if (rg_backup_count == 0)
-        rg_msg("No data from previous step", RG_MSG_ERROR);
-    else {
-        rg_backup_index = (rg_backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
-        rg_backup_count--;
-
-        rom_glitcher_t* slot = &rg_backup[rg_backup_index];
-
-        if (rg_main.glitches) {
-            free(rg_main.glitches);
-            rg_main.glitches = NULL;
-        }
-
-        rg_main = *slot;
-
-        if (slot->glitch_count > 0 && slot->glitches) {
-            rg_main.glitches = malloc(sizeof(rom_glitch_t) * slot->glitch_count);
-            if (rg_main.glitches) {
-                memcpy(rg_main.glitches, slot->glitches, sizeof(rom_glitch_t) * slot->glitch_count);
-            }
-            else {
-                rg_main.glitches = NULL;
-                rg_main.glitch_count = 0;
-                rg_msg("Previous step restore failed (memory)", RG_MSG_ERROR);
-            }
-        }
-        else {
-            rg_main.glitches = NULL;
-            rg_msg("Previous step restore failed (no backup)", RG_MSG_ERROR);
-        }
-
-        rg_game_reset();
-    }
 }
 
 // "Отрисовка" меню

@@ -26,19 +26,19 @@ typedef struct {
     uint32_t address;
     uint8_t initial_value;
     uint8_t mod_value;
-} rom_glitch_t;
+} rom_glitcher_glitch_t;
 
 typedef struct {
-    rom_glitch_t* glitches;
+    rom_glitcher_glitch_t* glitch;
     uint32_t glitch_count;
     uint32_t range_start;
     uint32_t range_size;
     uint32_t step_count;
     uint32_t seed;
     bool localizing;
-    bool launch;
+    bool launch_done;
     bool init_done;
-} rom_glitcher_t;
+} rom_glitcher_main_t;
 
 typedef struct {
     bool was_pressed;
@@ -76,18 +76,25 @@ typedef struct {
     int vheight;
 } rom_glitcher_bitmap_t;
 
+typedef struct {
+    uint32_t part1;
+    uint32_t part2;
+} rom_glitcher_dhash64_t;
+
+typedef struct {
+    rom_glitcher_glitch_t* glitch;
+    uint16_t glitch_count;
+    rom_glitcher_dhash64_t hash;
+} rom_glitcher_bug_range_t;
+
 extern const struct retro_game_info* rg_last_game; // info to reload current game
-extern rom_glitcher_bitmap_t rg_bitmap;
 extern int32_t rg_menu_button;
 extern bool rg_swap_buttons;
 extern bool rg_menu_visible;
 extern bool rg_found_glitches_modified;
 extern rom_glitcher_found_glitches_t rg_found_glitches;
 extern rom_glitcher_input_replay_t rg_input_replay;
-extern rom_glitcher_t rg_main;
-extern rom_glitcher_t rg_backup[RG_MAX_BACKUP_SLOTS];
-extern rom_glitcher_t rg_backup_before_local;
-extern uint8_t rg_backup_index;
+extern rom_glitcher_main_t rg_main;
 extern uint8_t rg_backup_count;
 extern uint32_t rg_total_glitch_count;
 extern rom_glitcher_button_state_t rg_button_states[7];
@@ -108,19 +115,15 @@ extern retro_input_poll_t input_poll_cb;
 extern retro_input_state_t input_state_cb;
 extern retro_environment_t environ_cb;
 
-void rg_create_step_backup(void);
-void rg_instructions_restore(void);
-void rg_instructions_shuffle(void);
-void rg_instructions_inversion(void);
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
 void rg_force_stop_glitcher(void);
-void rg_current_search_end(void);
 void rg_game_reset(void);
 void rg_game_save_state(void);
 void rg_game_load_state(void);
 uint8_t rg_save_found_to_file(uint32_t virt_address,
     uint32_t real_address, uint8_t intial_value, uint8_t mod_value);
+void rg_launch_glitcher(void);
 uint32_t rg_virt_to_real_rom_offset(uint32_t address);
 uint32_t rg_real_to_virt_rom_offset(uint32_t address);
 void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheight);

@@ -27,10 +27,6 @@ typedef struct {
 extern rom_glitcher_menu_manager_t rg_menu;
 extern uint8_t rg_branch_allowed;
 
-void menu_item_1_bug(void);
-void menu_item_2_not_found(void);
-void menu_item_3_found(void);
-void menu_item_4_step_back(void);
 void rg_menu_show(void);
 void rg_menu_hide(void);
 void rg_msg(const char* s, uint8_t context);
