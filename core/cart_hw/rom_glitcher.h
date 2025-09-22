@@ -3,13 +3,13 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_VERSION "v0.2.6b"
-#define RG_DISABLED_KEY                 -2   // random number that is not gamepad button
+#define RG_VERSION "v0.3.0"
+#define RG_DISABLED_KEY                 -2  // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
 #define RG_MAX_FOUND_GLITCH_PER_PAGE    6
-#define RG_MAX_REPLAY_FRAMES            3600 // 60 FPS * 60 sec
-#define RG_MAX_REPLAY_GAMEPADS          2 // port 0 and 1
+#define RG_MAX_REPLAY_FRAMES            3600    // 60 FPS * 60 sec
+#define RG_MAX_REPLAY_GAMEPADS          2   // port 0 and 1
 
 #define RG_MSG_DEBUG        0
 #define RG_MSG_INFO         1
@@ -132,8 +132,6 @@ void rg_force_stop_glitcher(void);
 void rg_game_reset(void);
 void rg_game_save_state(void);
 void rg_game_load_state(void);
-uint8_t rg_save_found_to_file(uint32_t virt_address,
-    uint32_t real_address, uint8_t intial_value, uint8_t mod_value);
 void rg_launch_glitcher(void);
 uint32_t rg_virt_to_real_rom_offset(uint32_t address);
 uint32_t rg_real_to_virt_rom_offset(uint32_t address);

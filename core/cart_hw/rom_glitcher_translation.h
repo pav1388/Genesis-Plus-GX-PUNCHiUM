@@ -5,7 +5,6 @@
 
 #define TR(id) rg_get_translation(id)
 
-// translation.h
 typedef enum {
     RG_TR_LAUNCH_GLITCHER,
     RG_TR_LIST_OF_FOUND,
@@ -36,10 +35,9 @@ typedef enum {
     RG_TR_FOUND,
     RG_TR_RANGE, 
     RG_TR_GLITCH,
-    RG_TR_EMPTY_SLOT, // DDDel
     RG_TR_CONTINUE_SEARCH,
     RG_TR_ADDRESS_CHANGED,
-    RG_TR_CHECKSUM_CORRECTED,
+    RG_TR_CHECKSUM_CORRECTED, // not used
     RG_TR_DUPLICATE,
     RG_TR_GLITCH_SAVED_TO,
     RG_TR_ERROR_COMMON_1, 
@@ -51,12 +49,12 @@ typedef enum {
     RG_TR_ERROR_MEMORY,
     RG_TR_ERROR_BACKUP,
     RG_TR_ERROR_ADDRESS,
+    RG_TR_ERROR_FILE_ACCESS,
     RG_TR_EMPTY,
     RG_TR_COUNT
 } rom_glitcher_translation_t;
 
 void rg_get_language(void);
 const char* rg_get_translation(rom_glitcher_translation_t id);
-
 
 #endif

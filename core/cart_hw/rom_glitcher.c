@@ -23,6 +23,8 @@ static void detect_bug(void);
 static void remove_one_bug_from_rg_backup(uint32_t del_addr);
 static void remove_one_bug_from_all_bug_range(uint32_t del_addr);
 static void step4_back(void);
+static bool cheats_file_parse(void);
+static bool cheats_file_save(uint32_t real_address, uint8_t initial_value, uint8_t mod_value);
 
 rom_glitcher_main_t rg_main = {
     .glitch = NULL,
@@ -446,9 +448,9 @@ static void step3_found(void) {
     create_step_backup();
 
     if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
-        // глитч найден
+        // адрес найден
 
-        // поиск дубликата в уже найденных глитчах
+        // поиск дубликата в уже найденных адресах
         for (int i = 0; i < rg_found_glitches.count; i++) {
             if (rg_main.glitch[0].address == rg_found_glitches.virt_address[i]) {
                 current_search_end();
@@ -456,7 +458,7 @@ static void step3_found(void) {
             }
         }
 
-        // выбор слота для добавления глитча в список найденных
+        // выбор слота для добавления адреса при превышении общего количества
         if (rg_found_glitches.count >= RG_MAX_FOUND_GLITCH_SLOTS) {
             for (int i = 1; i < RG_MAX_FOUND_GLITCH_SLOTS; i++) {
                 rg_found_glitches.virt_address[i - 1] = rg_found_glitches.virt_address[i];
@@ -474,7 +476,7 @@ static void step3_found(void) {
         rg_found_glitches.enabled[rg_found_glitches.count] = true;
         rg_found_glitches.virt_address[rg_found_glitches.count] = rg_main.glitch[0].address;
         rg_found_glitches.real_address[rg_found_glitches.count] = rg_virt_to_real_rom_offset(rg_found_glitches.virt_address[rg_found_glitches.count]);
-        rg_save_found_to_file(rg_found_glitches.virt_address[rg_found_glitches.count], rg_found_glitches.real_address[rg_found_glitches.count], rg_found_glitches.initial_value[rg_found_glitches.count], rg_found_glitches.mod_value[rg_found_glitches.count]);
+        cheats_file_save(rg_found_glitches.real_address[rg_found_glitches.count], rg_found_glitches.initial_value[rg_found_glitches.count], rg_found_glitches.mod_value[rg_found_glitches.count]);
 
         rg_found_glitches.count++;
         rg_found_glitches.total_pages =
@@ -582,7 +584,10 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
     
     if (need_load_state) {
         need_load_state = false;
-        rg_game_load_state();
+
+        if(rg_main.launch_done)
+            rg_game_load_state();
+
         if (rg_input_replay.length > 0) {
             rg_input_replay.play = true;
             rg_input_replay.play_count = 0;
@@ -854,9 +859,8 @@ static void apply_glitches(void) {
     
     apply_found_glitches();
 
-    if (rg_bug_glitches.count) {
+    if (rg_bug_glitches.count)
         cart.rom[rg_bug_glitches.address[rg_bug_glitches.count - 1]] = rg_bug_glitches.mod_value[rg_bug_glitches.count - 1];
-    }
 
     // если заголовок не был удалён эмулятором
     if (!rg_rom_has_header) {
@@ -876,6 +880,8 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     }
 
     rg_get_language();
+    cheats_file_parse();
+    apply_found_glitches();
 
     // если заголовок не был удалён эмулятором
     if (!rg_rom_has_header) {
@@ -885,7 +891,6 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         if (header_checksum != real_checksum) {
             cart.rom[0x18E] = (real_checksum >> 8) & 0xFF;
             cart.rom[0x18F] = real_checksum & 0xFF;
-            rg_msg(RG_MSG_INFO, TR(RG_TR_CHECKSUM_CORRECTED));
         }
     }
 
@@ -1052,8 +1057,6 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         rg_main.init_done = false;
     }
 
-    apply_found_glitches();
-
 #ifndef RANDOM_SEED
     rg_main.seed = 19881029;
 #endif // RANDOM_SEED
@@ -1125,15 +1128,6 @@ static void current_search_end(void) {
     rg_menu_visible = true;
     rg_menu.current = &rg_menu.found;
     
-    for (int i = 0; i < rg_found_glitches.count; i++) {
-        if (rg_main.glitch[0].address == rg_found_glitches.virt_address[i]) {
-            rg_menu.current->selected_index = 1;
-            rg_found_glitches.current_page = 0;
-            load_step_before_local = true;
-            return;
-        }
-    }
-
     if (rg_found_glitches.count > 0) {
         for (int i = 0; i < rg_found_glitches.count; i++) {
             if (rg_main.glitch[0].address == rg_found_glitches.virt_address[i]) {
@@ -1249,9 +1243,8 @@ uint32_t rg_real_to_virt_rom_offset(uint32_t address) {
     return virt_offset;
 }
 
-
-// сохранения файла с читами в папку с ROM
-uint8_t rg_save_found_to_file(uint32_t virt_address, uint32_t real_address, uint8_t initial_value, uint8_t mod_value) {
+// сохранения найденного адреса в чит-файл в папку с ROM файлом
+static bool cheats_file_save(uint32_t real_address, uint8_t initial_value, uint8_t mod_value) {
     char cheats_path[512] = { 0 };
     RFILE* f_cht = NULL;
 
@@ -1261,21 +1254,13 @@ uint8_t rg_save_found_to_file(uint32_t virt_address, uint32_t real_address, uint
     char slash = '/';
 #endif
 
-    if (!rg_last_game || !rg_last_game->path) {
-        rg_msg(RG_MSG_ERROR, "%s [C03]", TR(RG_TR_ERROR_COMMON_3)); // No last game info
-        return 3;
-    }
+    snprintf(cheats_path, sizeof(cheats_path), "%s%c%s_RG.cht", g_rom_dir, slash, g_rom_name);
+    f_cht = filestream_open(cheats_path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
-    snprintf(cheats_path, sizeof(cheats_path),
-        "%s%c%s_RGI.cht", g_rom_dir, slash, g_rom_name);
-
-    f_cht = filestream_open(cheats_path,
-        RETRO_VFS_FILE_ACCESS_READ,
-        RETRO_VFS_FILE_ACCESS_HINT_NONE);
-
-    // читаем файл
     char* file_content = NULL;
     int32_t size = 0;
+    int cheats_count = 0;
+
     if (f_cht) {
         filestream_seek(f_cht, 0, RETRO_VFS_SEEK_POSITION_END);
         size = filestream_tell(f_cht);
@@ -1284,99 +1269,214 @@ uint8_t rg_save_found_to_file(uint32_t virt_address, uint32_t real_address, uint
         if (size > 0) {
             file_content = (char*)calloc(1, size + 1);
             filestream_read(f_cht, file_content, size);
+
+            // Проверка на дубликат
+            char search[32];
+            snprintf(search, sizeof(search), "%06X:%02X", real_address, mod_value);
+            if (strstr(file_content, search)) {
+                free(file_content);
+                filestream_close(f_cht);
+                rg_msg(RG_MSG_INFO, TR(RG_TR_DUPLICATE));
+                return true;
+            }
+
+            // Подсчет существующих читов (ищем максимальный номер)
+            for (int i = 1; i <= RG_MAX_FOUND_GLITCH_SLOTS; i++) {
+                char cheat_pattern[32];
+                snprintf(cheat_pattern, sizeof(cheat_pattern), "cheat%d_", i);
+                if (strstr(file_content, cheat_pattern)) {
+                    cheats_count = i;
+                }
+                else {
+                    break;
+                }
+            }
         }
         filestream_close(f_cht);
     }
 
+    // Если файла не было или он пустой, начинаем с 0
     if (!file_content) {
-        file_content = strdup("cheats = \"0\"\n");
-        size = strlen(file_content);
+        file_content = strdup("");
+        size = 0;
+        cheats_count = 0;
     }
 
-    // проверка на дубликат
-    char search[64];
-    snprintf(search, sizeof(search), "code = \"%06X:%02X\"", real_address, mod_value);
-    if (strstr(file_content, search)) {
-        free(file_content);
-        rg_msg(RG_MSG_INFO, TR(RG_TR_DUPLICATE)); // Duplicate. Address is already saved in cht-file
-        return 2;
-    }
-
-    // парсим количество читов
-    int cheats_count = 0;
-    char* cheats_pos = strstr(file_content, "cheats = ");
-    if (cheats_pos) {
-        char* num_start = strchr(cheats_pos, '"');
-        if (num_start) {
-            num_start++;
-            cheats_count = atoi(num_start);
-        }
-    }
-
-    // новый блок
-    char new_entries[512];
-    char desc[64];
-    snprintf(desc, sizeof(desc),
-        "Glitch %u, steps %u (0x%02X->0x%02X)", cheats_count, rg_main.step_count, initial_value, mod_value);
-
-    snprintf(new_entries, sizeof(new_entries),
-        "cheat%d_desc = \"%s\"\n"
+    // Создаем новый блок читов
+    char new_block[256];
+    snprintf(new_block, sizeof(new_block),
+        "cheat%d_desc = \"Glitch %d, steps %u (0x%02X->0x%02X)\"\n"
         "cheat%d_code = \"%06X:%02X\"\n"
-        "cheat%d_enable = \"false\"\n\n",
-        cheats_count, desc,
-        cheats_count, real_address, mod_value,
-        cheats_count);
+        "cheat%d_enable = \"true\"\n\n",
+        cheats_count + 1, cheats_count + 1, rg_main.step_count, initial_value, mod_value,
+        cheats_count + 1, real_address, mod_value,
+        cheats_count + 1);
 
-    // собираем новый файл
-    int new_count = cheats_count + 1;
-    char* new_file = (char*)calloc(1, size + strlen(new_entries) + 64);
+    // Создаем или обновляем заголовок с количеством читов
+    char header[32];
+    snprintf(header, sizeof(header), "cheats = \"%d\"\n", cheats_count + 1);
+
+    // Если в файле уже есть заголовок, заменяем его
+    char* new_file = NULL;
+    char* cheats_pos = strstr(file_content, "cheats = ");
 
     if (cheats_pos) {
         char* line_end = strchr(cheats_pos, '\n');
-        if (!line_end) line_end = cheats_pos + strlen(cheats_pos);
+        if (line_end) {
+            // Заменяем существующий заголовок
+            size_t prefix_len = cheats_pos - file_content;
+            size_t suffix_len = strlen(line_end + 1);
 
-        *cheats_pos = '\0';
+            new_file = (char*)malloc(prefix_len + strlen(header) + suffix_len + strlen(new_block) + 1);
 
-        snprintf(new_file, size + strlen(new_entries) + 64,
-            "%scheats = \"%d\"\n%s%s",
-            file_content,
-            new_count,
-            line_end + 1,
-            new_entries);
+            memcpy(new_file, file_content, prefix_len);
+            strcpy(new_file + prefix_len, header);
+            strcat(new_file + prefix_len + strlen(header), line_end + 1);
+            strcat(new_file, new_block);
+        }
+        else {
+            // Нет перевода строки - заменяем весь остаток файла
+            size_t prefix_len = cheats_pos - file_content;
+            new_file = (char*)malloc(prefix_len + strlen(header) + strlen(new_block) + 1);
+
+            memcpy(new_file, file_content, prefix_len);
+            strcpy(new_file + prefix_len, header);
+            strcat(new_file, new_block);
+        }
     }
     else {
-        snprintf(new_file, size + strlen(new_entries) + 64,
-            "%scheats = \"%d\"\n%s",
-            file_content,
-            new_count,
-            new_entries);
+        // Заголовка нет - добавляем в начало
+        new_file = (char*)malloc(strlen(header) + strlen(file_content) + strlen(new_block) + 1);
+
+        strcpy(new_file, header);
+        strcat(new_file, file_content);
+        strcat(new_file, new_block);
     }
 
-    // сохраняем
+    // Сохраняем файл
     f_cht = filestream_open(cheats_path, RETRO_VFS_FILE_ACCESS_WRITE, RETRO_VFS_FILE_ACCESS_HINT_NONE);
     if (!f_cht) {
         free(file_content);
         free(new_file);
-        return 4;
+        rg_msg(RG_MSG_ERROR, "%s [F01]", TR(RG_TR_ERROR_FILE_ACCESS));
+        return true;
     }
 
     filestream_write(f_cht, new_file, strlen(new_file));
     filestream_close(f_cht);
+
     free(file_content);
     free(new_file);
 
-    // уведомление
     rg_msg(RG_MSG_FOUND, "%s \"%s%s\"", TR(RG_TR_GLITCH_SAVED_TO),
         (strlen(cheats_path) > 90) ? "..." : "",
         (strlen(cheats_path) > 90) ? cheats_path + (strlen(cheats_path) - 87) : cheats_path);
 
-    return 0;
+    return false;
+}
+
+// Парсинг чит-файла из папки с ROM файлом
+static bool cheats_file_parse(void) {
+    char cheats_path[512] = { 0 };
+    RFILE* f_cht = NULL;
+
+#if defined(_WIN32)
+    char slash = '\\';
+#else
+    char slash = '/';
+#endif
+
+    snprintf(cheats_path, sizeof(cheats_path), "%s%c%s_RG.cht", g_rom_dir, slash, g_rom_name);
+    f_cht = filestream_open(cheats_path, RETRO_VFS_FILE_ACCESS_READ, RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+    if (!f_cht)
+        return true;
+
+    rg_found_glitches.count = 0;
+    rg_found_glitches.enabled_count = 0;
+
+    char line[256];
+    int current_cheat_num = 0;
+    uint32_t current_address = 0;
+    uint8_t current_mod_value = 0;
+    bool has_code = false;
+
+    while (fgets(line, sizeof(line), f_cht) && rg_found_glitches.count < RG_MAX_FOUND_GLITCH_SLOTS) {
+        // Ищем строки с кодом чита
+        if (strstr(line, "cheat") && strstr(line, "_code")) {
+            char* quote_start = strchr(line, '"');
+            if (quote_start) {
+                quote_start++;
+                char* quote_end = strchr(quote_start, '"');
+                if (quote_end) {
+                    *quote_end = '\0';
+
+                    // Разделяем адрес и значение
+                    char* colon_pos = strchr(quote_start, ':');
+                    if (colon_pos) {
+                        *colon_pos = '\0';
+
+                        // Преобразуем hex в числа
+                        current_address = (uint32_t)strtoul(quote_start, NULL, 16);
+                        current_mod_value = (uint8_t)strtoul(colon_pos + 1, NULL, 16);
+                        has_code = true;
+                    }
+                }
+            }
+        }
+        // Ищем строки со статусом чита
+        else if (strstr(line, "cheat") && strstr(line, "_enable")) {
+            char* quote_start = strchr(line, '"');
+            if (quote_start) {
+                quote_start++;
+                char* quote_end = strchr(quote_start, '"');
+                if (quote_end) {
+                    *quote_end = '\0';
+
+                    // Если у нас есть код чита, обрабатываем полный блок
+                    if (has_code) {
+                        int index = rg_found_glitches.count;
+
+                        rg_found_glitches.real_address[index] = current_address;
+                        rg_found_glitches.virt_address[index] = rg_real_to_virt_rom_offset(current_address);
+                        rg_found_glitches.mod_value[index] = current_mod_value;
+                        rg_found_glitches.initial_value[index] = current_mod_value ^ 1;
+
+                        if (strcmp(quote_start, "true") == 0) {
+                            rg_found_glitches.enabled[index] = true;
+                            rg_found_glitches.enabled_count++;
+                        }
+                        else
+                            rg_found_glitches.enabled[index] = false;
+
+                        rg_found_glitches.count++;
+                        has_code = false;
+                        current_address = 0;
+                        current_mod_value = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    filestream_close(f_cht);
+
+    rg_found_glitches.total_pages =
+        (rg_found_glitches.count + RG_MAX_FOUND_GLITCH_PER_PAGE - 1) / RG_MAX_FOUND_GLITCH_PER_PAGE;
+
+    return false;
 }
 
 // сброс игры
 void rg_game_reset(void) {
     rg_menu_hide();
     retro_unload_game();
+
+    if (!rg_last_game || !rg_last_game->path) {
+        rg_msg(RG_MSG_ERROR, "%s [C03]", TR(RG_TR_ERROR_COMMON_3)); // No last game info
+        return;
+    }
+
     retro_load_game(rg_last_game);
     // далее происходит вызов rg_init(), но с rg_main.init_done = true
 }
