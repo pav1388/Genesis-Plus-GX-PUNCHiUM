@@ -4,8 +4,8 @@
  *
  *  Support for all TMS99xx modes, Mode 4 & Mode 5 rendering
  *
- *  Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003  Charles Mac Donald (original code)
- *  Copyright (C) 2007-2016  Eke-Eke (Genesis Plus GX)
+ *  Copyright (C) 1998-2003  Charles Mac Donald (original code)
+ *  Copyright (C) 2007-2025  Eke-Eke (Genesis Plus GX)
  *  Copyright (C) 2022  AlexKiri (enhanced vscroll mode rendering function)
  *
  *  Redistribution and use of this code or any derivative works are permitted
@@ -1406,10 +1406,7 @@ void render_bg_m4(int line)
 {
   int column;
   uint16 *nt;
-  uint32 attr, atex, *src;
-
-  /* 32 x 8 pixels */
-  int width = 32;
+  uint32 attr, atex;
 
   /* Horizontal scrolling */
   int index = ((reg[0] & 0x40) && (line < 0x10)) ? 0x100 : reg[0x08];
@@ -1430,7 +1427,7 @@ void render_bg_m4(int line)
     nt_mask |= 0x400;
   }
 
-  /* Test for extended modes (Master System II & Game gear VDP only) */
+  /* Check extended height modes (Master System II & Game Gear VDP only) */
   if (bitmap.viewport.h > 192)
   {
     /* Vertical scroll mask */
@@ -1461,8 +1458,8 @@ void render_bg_m4(int line)
     index++;
   }
 
-  /* Draw tiles */
-  for(column = 0; column < width; column++, index++)
+  /* Draw tiles (32 x 8 pixels) */
+  for(column = 0; column < 32; column++, index++)
   {
     /* Stop vertical scrolling for rightmost eight tiles */
     if((column == 24) && (reg[0] & 0x80))
@@ -1482,7 +1479,7 @@ void render_bg_m4(int line)
     }
 
     /* Read name table attribute word */
-    attr = nt[index % width];
+    attr = nt[index & 0x1F];
 #ifndef LSB_FIRST
     attr = (((attr & 0xFF) << 8) | ((attr & 0xFF00) >> 8));
 #endif
@@ -1490,19 +1487,42 @@ void render_bg_m4(int line)
     /* Expand priority and palette bits */
     atex = atex_table[(attr >> 11) & 3];
 
-    /* Cached pattern data line (4 bytes = 4 pixels at once) */
-    src = (uint32 *)&bg_pattern_cache[((attr & 0x7FF) << 6) | (v_line)];
+    /* On 315-5124 VDP only, Color Table Base Address (resp. Pattern Generator Table Base Address) register bits 7:0 (resp. bits 2:0) */
+    /* are used as a mask on tile index upper bits when fetching bitplanes 0&1 (resp. bitplanes 2&3), which correspond to tile pixels */
+    /* data bits 0:1 (resp. bits 2:3) */
+    if (system_hw <= SYSTEM_SMS)
+    {
+      /* Cached pattern data lines (4 bytes = 4 pixels at once) for pixels data bits 0:1 and 2:3 */
+      uint32 *src01 = (uint32 *)&bg_pattern_cache[((attr & (0x601 | (reg[3] << 1))) << 6) | v_line];
+      uint32 *src23 = (uint32 *)&bg_pattern_cache[((attr & (0x63F | ((reg[4] & 0x07) << 6))) << 6) | v_line];
 
-    /* Copy left & right half, adding the attribute bits in */
+      /* Copy left & right half, retrieving each pixel data bits from appropriate source and adding the attribute bits in */
 #ifdef ALIGN_LONG
-    WRITE_LONG(dst, src[0] | atex);
-    dst++;
-    WRITE_LONG(dst, src[1] | atex);
-    dst++;
+      WRITE_LONG(dst, (src01[0] & 0x03030303) | (src23[0] & 0x0C0C0C0C) | atex);
+      dst++;
+      WRITE_LONG(dst, (src01[1] & 0x03030303) | (src23[1] & 0x0C0C0C0C) | atex);
+      dst++;
 #else
-    *dst++ = (src[0] | atex);
-    *dst++ = (src[1] | atex);
+      *dst++ = (src01[0] & 0x03030303) | (src23[0] & 0x0C0C0C0C) | atex;
+      *dst++ = (src01[1] & 0x03030303) | (src23[1] & 0x0C0C0C0C) | atex;
 #endif
+    }
+    else
+    {
+      /* Cached pattern data line (4 bytes = 4 pixels at once) */
+      uint32 *src = (uint32 *)&bg_pattern_cache[((attr & 0x7FF) << 6) | v_line];
+
+      /* Copy left & right half, adding the attribute bits in */
+#ifdef ALIGN_LONG
+      WRITE_LONG(dst, src[0] | atex);
+      dst++;
+      WRITE_LONG(dst, src[1] | atex);
+      dst++;
+#else
+      *dst++ = src[0] | atex;
+      *dst++ = src[1] | atex;
+#endif
+    }
   }
 }
 
@@ -3679,8 +3699,8 @@ void render_obj_m4(int line)
   /* Default sprite width */
   int width = 8;
 
-  /* Sprite Generator address mask (LSB is masked for 8x16 sprites) */
-  uint16 sg_mask = (~0x1C0 ^ (reg[6] << 6)) & (~((reg[1] & 0x02) >> 1));
+  /* Sprite Generator address mask */
+  uint16 sg_mask = ~0x1C0 ^ (reg[6] << 6);
 
   /* Zoomed sprites (not working on Genesis VDP) */
   if (system_hw < SYSTEM_MD)
@@ -3703,6 +3723,17 @@ void render_obj_m4(int line)
   /* Draw sprites in front-to-back order */
   while (count--)
   {
+    /* 315-5124 VDP specific */
+    if (system_hw <= SYSTEM_SMS)
+    {
+      /* last 4 sprites can not be zoomed */
+      if (count < 4)
+      {
+        /* force default width for remaining sprites */
+        width = 8;
+      }
+    }
+
     /* Sprite pattern index */
     temp = (object_info->attr | 0x100) & sg_mask;
 
@@ -3740,17 +3771,6 @@ void render_obj_m4(int line)
     {
       /* Draw sprite pattern (zoomed sprites are rendered at half speed) */
       DRAW_SPRITE_TILE_ACCURATE_2X(end,0,lut[5])
-
-      /* 315-5124 VDP specific */
-      if (system_hw < SYSTEM_SMS2)
-      {
-        /* only 4 first sprites can be zoomed */
-        if (count == (object_count[line] - 4))
-        {
-          /* Set default width for remaining sprites */
-          width = 8;
-        }
-      }
     }
     else
     {
@@ -4268,9 +4288,6 @@ void parse_satb_tms(int line)
     /* Adjust height for 16x16 sprites */
     height <<= ((reg[1] & 0x02) >> 1);
 
-    /* Adjust height for zoomed sprites */
-    height <<= (reg[1] & 0x01);
-
     /* Parse Sprite Table (32 entries) */
     do
     {
@@ -4292,6 +4309,9 @@ void parse_satb_tms(int line)
       /* Y range */
       ypos = line - ypos;
 
+      /* Adjust Y range for zoomed sprites */
+      ypos >>= (reg[1] & 0x01);
+
       /* Sprite is visible on this line ? */
       if ((ypos >= 0) && (ypos < height))
       {
@@ -4305,9 +4325,6 @@ void parse_satb_tms(int line)
           }
           break;
         }
-
-        /* Adjust Y range back for zoomed sprites */
-        ypos >>= (reg[1] & 0x01);
 
         /* Store sprite attributes for later processing */
         object_info->ypos = ypos;
@@ -4406,6 +4423,12 @@ void parse_satb_m4(int line)
       object_info->ypos = ypos;
       object_info->xpos = st[(0x80 + (i << 1)) & st_mask];
       object_info->attr = st[(0x81 + (i << 1)) & st_mask];
+
+      /* 8x16 sprites pattern index LSB is masked */
+      if (reg[1] & 0x02)
+      {
+        object_info->attr &= 0xfe;
+      }
 
       /* Increment Sprite count */
       ++count;

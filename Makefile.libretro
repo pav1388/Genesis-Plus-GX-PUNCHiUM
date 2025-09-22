@@ -1,5 +1,3 @@
-CFLAGS += -DRANDOM_SEED -DCOMPRESSED_OPCODE_TABLE
-
 DEBUG = 0
 LOGSOUND = 0
 FRONTEND_SUPPORTS_RGB565 = 1
@@ -568,7 +566,7 @@ endif
 endif
 
 ifeq ($(SHARED_LIBVORBIS),)
-   TREMOR_SRC_DIR := $(CORE_DIR)/core/tremor
+   TREMOR_SRC_DIR := $(CORE_DIR)/core/sound/tremor
 endif
 
 include $(CORE_DIR)/libretro/Makefile.common
@@ -664,7 +662,6 @@ clean-objs:
 clean:
 	rm -f $(OBJECTS)
 	rm -f $(TARGET)
-	rm -f $(SOURCES_C:.c=.d) $(SOURCES_CXX:.cpp=.d)
 
 .PHONY: clean clean-objs
 endif
