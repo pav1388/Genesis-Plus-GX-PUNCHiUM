@@ -5,6 +5,13 @@
 // perfect_genius - glitcher idea, pav13 - implementation
 // https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
 
+#ifndef RANDOM_SEED
+#warning RANDOM_SEED not defined
+#endif
+#ifndef COMPRESSED_OPCODE_TABLE
+#warning COMPRESSED_OPCODE_TABLE not defined
+#endif
+
 #include "shared.h"
 
 static void current_search_end(void);

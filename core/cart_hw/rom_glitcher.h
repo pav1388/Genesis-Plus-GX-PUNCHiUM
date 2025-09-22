@@ -139,11 +139,4 @@ uint32_t rg_virt_to_real_rom_offset(uint32_t address);
 uint32_t rg_real_to_virt_rom_offset(uint32_t address);
 void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheight);
 
-#ifndef RANDOM_SEED
-#warning RANDOM_SEED not defined
-#endif
-#ifndef COMPRESSED_OPCODE_TABLE
-#warning COMPRESSED_OPCODE_TABLE not defined
-#endif
-
 #endif
