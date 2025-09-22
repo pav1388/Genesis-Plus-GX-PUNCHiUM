@@ -4,8 +4,7 @@
 #define _ROM_GLITCHER_MENU_H_
 
 typedef struct {
-    const char* label;
-    const char* (*get_label)(void);
+    const char* (*get_label)(uint8_t index);
     void (*action)(void);
 } rom_glitcher_menu_item_t;
 
@@ -20,7 +19,7 @@ typedef struct {
     rom_glitcher_menu_t launch;
     rom_glitcher_menu_t main;
     rom_glitcher_menu_t options;
-    rom_glitcher_menu_t list;
+    rom_glitcher_menu_t found;
     rom_glitcher_menu_t branch;
 } rom_glitcher_menu_manager_t;
 
@@ -29,6 +28,6 @@ extern uint8_t rg_branch_allowed;
 
 void rg_menu_show(void);
 void rg_menu_hide(void);
-void rg_msg(const char* s, uint8_t context);
+void rg_msg(uint8_t context, const char* format, ...);
 
 #endif

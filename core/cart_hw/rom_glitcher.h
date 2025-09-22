@@ -3,24 +3,26 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_VERSION "v0.2.4b"
+#define RG_VERSION "v0.2.6b"
 #define RG_DISABLED_KEY                 -2   // random number that is not gamepad button
-#define RG_MAX_BACKUP_SLOTS             33   // 100 slots * 10000 candidates = ~7 Mb RAM
-#define RG_MAX_FOUND_GLITCH_SLOTS       240
+#define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
+#define RG_MAX_FOUND_GLITCH_SLOTS       256
 #define RG_MAX_FOUND_GLITCH_PER_PAGE    6
 #define RG_MAX_REPLAY_FRAMES            3600 // 60 FPS * 60 sec
-#define RG_MAX_REPLAY_GAMEPADS          2
+#define RG_MAX_REPLAY_GAMEPADS          2 // port 0 and 1
 
-#define RG_MSG_INFO        1
-#define RG_MSG_ERROR       2
-#define RG_MSG_FOUND       3
-#define RG_MSG_REPLAY_REC  4
-#define RG_MSG_REPLAY_PLAY 5
+#define RG_MSG_DEBUG        0
+#define RG_MSG_INFO         1
+#define RG_MSG_ERROR        2
+#define RG_MSG_FOUND        3
+#define RG_MSG_REPLAY_REC   4
+#define RG_MSG_REPLAY_PLAY  5
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 typedef struct {
     uint32_t address;
@@ -87,6 +89,13 @@ typedef struct {
     rom_glitcher_dhash64_t hash;
 } rom_glitcher_bug_range_t;
 
+typedef struct {
+    uint32_t address[UINT8_MAX];
+    uint8_t initial_value[UINT8_MAX];
+    uint8_t mod_value[UINT8_MAX];
+    uint8_t count;
+} rom_glitcher_bug_glitches_t;
+
 extern const struct retro_game_info* rg_last_game; // info to reload current game
 extern int32_t rg_menu_button;
 extern bool rg_swap_buttons;
@@ -95,6 +104,7 @@ extern bool rg_found_glitches_modified;
 extern rom_glitcher_found_glitches_t rg_found_glitches;
 extern rom_glitcher_input_replay_t rg_input_replay;
 extern rom_glitcher_main_t rg_main;
+extern rom_glitcher_bug_glitches_t rg_bug_glitches;
 extern uint8_t rg_backup_count;
 extern uint32_t rg_total_glitch_count;
 extern rom_glitcher_button_state_t rg_button_states[7];
@@ -105,6 +115,7 @@ extern bool rg_rom_is_byte_swapped;
 extern bool rg_rom_has_header;
 extern bool rg_rom_was_deinterleaved;
 extern char rg_log[1024];
+extern bool rg_clear_bug_range;
 
 extern bool libretro_supports_bitmasks;
 extern char g_rom_dir[256];

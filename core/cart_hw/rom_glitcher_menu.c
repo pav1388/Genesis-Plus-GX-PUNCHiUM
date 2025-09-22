@@ -2,11 +2,16 @@
 
 #include "shared.h"
 
-static const char* get_label_main(void);
-static const char* get_label_list_of_found(void);
-static const char* get_label_branch_allowed(void);
-static const char* get_label_menu_list_of_found(void);
-static const char* get_label_menu_branch_allowed(void);
+static const char* get_label_launch_glitcher(uint8_t index);
+static const char* get_label_stop_glitcher(uint8_t index);
+static const char* get_label_options(uint8_t index);
+static const char* get_label_game_save_state(uint8_t index);
+static const char* get_label_pause_effect(uint8_t index);
+static const char* get_label_search(uint8_t index);
+static const char* get_label_list_of_found(uint8_t index);
+static const char* get_label_branch_allowed(uint8_t index);
+static const char* get_label_menu_list_of_found(uint8_t index);
+static const char* get_label_menu_branch_allowed(uint8_t index);
 static void menu_item_pause_effect(void);
 static void menu_item_toggle_found_instruction(void);
 static void menu_item_branch_allowed(void);
@@ -18,135 +23,137 @@ static void menu_item_open_branch_allowed(void);
 static void menu_item_game_save_state(void);
 
 static bool refresh_menu_log = true;
-static char dyn_label_main[64];
-static char dyn_label_list_of_found[32];
-static char dyn_label_branch_allowed[32];
+static char dyn_label_search[128];
+static char dyn_label_list_of_found[128];
+static char dyn_label_branch_allowed[128];
 static char dyn_label_menu_list_of_found[8][20];
 static char dyn_label_menu_branch_allowed[8][20];
 
 static rom_glitcher_menu_item_t menu_launch[] = {
-    { "Launch Glitcher " RG_VERSION, NULL, rg_launch_glitcher },
-    { "List of found", get_label_list_of_found, menu_item_open_list_of_found },
-    { "Branch allowed", get_label_branch_allowed, menu_item_open_branch_allowed }
+    { get_label_launch_glitcher, rg_launch_glitcher},           // Launch Glitcher
+    { get_label_list_of_found, menu_item_open_list_of_found },  // List of found
+    { get_label_branch_allowed, menu_item_open_branch_allowed } // Branch allowed
 };
 
 static rom_glitcher_menu_item_t menu_search[] = {
-    { "BUG NOT_FOUND FOUND Step_back", get_label_main, NULL },
-    { "List of found", get_label_list_of_found, menu_item_open_list_of_found },
-    { "Stop Glitcher", NULL, rg_force_stop_glitcher },
-    { "Options", NULL, menu_item_open_options }
+    { get_label_search, NULL },                                 // BUG NOT_FOUND FOUND Step_back
+    { get_label_list_of_found, menu_item_open_list_of_found },  // List of found
+    { get_label_stop_glitcher, rg_force_stop_glitcher },        // Stop Glitcher
+    { get_label_options, menu_item_open_options }               // Options
 };
 
 static rom_glitcher_menu_item_t menu_options[] = {
-    { "Save new state", NULL, menu_item_game_save_state },
-    //{ "Load last state", NULL, rg_game_load_state },
-    { "Pause effect", NULL, menu_item_pause_effect }
+    { get_label_game_save_state, menu_item_game_save_state },   // Save state
+    { get_label_pause_effect, menu_item_pause_effect }          // Pause effect
 };
 
-static rom_glitcher_menu_item_t menu_list[] = {
-    { "prev", get_label_menu_list_of_found, menu_item_prev_page },
-    { "1", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "2", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "3", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "4", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "5", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "6", get_label_menu_list_of_found, menu_item_toggle_found_instruction },
-    { "next", get_label_menu_list_of_found, menu_item_next_page }
+static rom_glitcher_menu_item_t menu_found[] = {
+    { get_label_menu_list_of_found, menu_item_prev_page },             // prev
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 1
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 2
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 3
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 4
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 5
+    { get_label_menu_list_of_found, menu_item_toggle_found_instruction }, // 6
+    { get_label_menu_list_of_found, menu_item_next_page }              // next
 };
 
 static rom_glitcher_menu_item_t menu_branch[] = {
-    { " -/-", get_label_menu_branch_allowed, NULL },
-    //{ "60/61", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BRA/BSR
-    { "62/63", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BHI/BLS
-    { "64/65", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BCC/BCS
-    { "66/67", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BNE/BEQ
-    { "68/69", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BVC/BVS
-    { "6A/6B", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BPL/BMI
-    { "6C/6D", get_label_menu_branch_allowed, menu_item_branch_allowed }, // BGE/BLT
-    { "6E/6F", get_label_menu_branch_allowed, menu_item_branch_allowed }  // BGT/BLE
+    { get_label_menu_branch_allowed, NULL },                       // BRA/BSR 0x60/61
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BHI/BLS 0x62/63
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BCC/BCS 0x64/65
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BNE/BEQ 0x66/67
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BVC/BVS 0x68/69
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BPL/BMI 0x6A/6B
+    { get_label_menu_branch_allowed, menu_item_branch_allowed },   // BGE/BLT 0x6C/6D
+    { get_label_menu_branch_allowed, menu_item_branch_allowed }    // BGT/BLE 0x6E/6F
 };
 
 rom_glitcher_menu_manager_t rg_menu = {
+    .current = NULL,
     .launch = { menu_launch, ARRAY_SIZE(menu_launch), 0 },
     .main = { menu_search, ARRAY_SIZE(menu_search), 0 },
     .options = { menu_options, ARRAY_SIZE(menu_options), 0 },
-    .list = { menu_list, ARRAY_SIZE(menu_list), 1 },
+    .found = { menu_found, ARRAY_SIZE(menu_found), 1 },
     .branch = { menu_branch, ARRAY_SIZE(menu_branch), 3 }
 };
 
-static const char* get_label_main(void) {
-    snprintf(dyn_label_main, sizeof(dyn_label_main), "[%s]Bug [%s]NOT found [%s]Found [%s]Step back:%u/%u",
+static const char* get_label_search(uint8_t index) {
+    snprintf(dyn_label_search, sizeof(dyn_label_search), TR(RG_TR_SEARCH_HEADER),
         rg_button_states[4].was_pressed ? "#" : "B",
         rg_button_states[5].was_pressed ? "#" : "X",
         rg_button_states[3].was_pressed ? "#" : "A",
-        rg_button_states[6].was_pressed ? "#" : "Y",
-        rg_backup_count, RG_MAX_BACKUP_SLOTS);
-    return dyn_label_main;
+        rg_button_states[6].was_pressed ? "#" : "Y");
+    return dyn_label_search;
 }
 
-static const char* get_label_list_of_found(void) {
-    snprintf(dyn_label_list_of_found, sizeof(dyn_label_list_of_found), "List of found: %u/%u",
+static const char* get_label_launch_glitcher(uint8_t index) { return TR(RG_TR_LAUNCH_GLITCHER); }
+static const char* get_label_stop_glitcher(uint8_t index) { return TR(RG_TR_STOP_GLITCHER); }
+static const char* get_label_options(uint8_t index) { return TR(RG_TR_OPTIONS); }
+static const char* get_label_game_save_state(uint8_t index) { return TR(RG_TR_SAVE_STATE); }
+static const char* get_label_pause_effect(uint8_t index) { return TR(RG_TR_PAUSE_EFFECT); }
+
+static const char* get_label_list_of_found(uint8_t index) {
+    snprintf(dyn_label_list_of_found, sizeof(dyn_label_list_of_found), TR(RG_TR_LIST_OF_FOUND),
         rg_found_glitches.enabled_count, rg_found_glitches.count);
     return dyn_label_list_of_found;
 }
 
-static const char* get_label_branch_allowed(void) {
+static const char* get_label_branch_allowed(uint8_t index) {
     uint8_t pairs_count = __builtin_popcount(rg_branch_allowed);
-    snprintf(dyn_label_branch_allowed, sizeof(dyn_label_branch_allowed), "Branch pairs allowed: %u/8", pairs_count);
+    snprintf(dyn_label_branch_allowed, sizeof(dyn_label_branch_allowed), TR(RG_TR_BRANCH_ALLOWED), pairs_count);
     return dyn_label_branch_allowed;
 }
 
-static const char* get_label_menu_list_of_found(void) {
-    static uint8_t j = 0;
-    uint8_t row = j;
-    j = (j + 1) % 8;
-
-    if (row == 0) { // prev page
+static const char* get_label_menu_list_of_found(uint8_t index) {
+    if (index == 0) { // prev page
         uint8_t prev_page = (rg_found_glitches.total_pages == 0) ? 0 :
             (rg_found_glitches.current_page + rg_found_glitches.total_pages - 1) % rg_found_glitches.total_pages;
 
-        snprintf(dyn_label_menu_list_of_found[row], sizeof(dyn_label_menu_list_of_found[row]),
-            "cur %u/%s %u", rg_found_glitches.current_page + 1, menu_list[row].label,
+        snprintf(dyn_label_menu_list_of_found[index], sizeof(dyn_label_menu_list_of_found[index]),
+            TR(RG_TR_PREV_PAGE), rg_found_glitches.current_page + 1,
             (rg_found_glitches.total_pages > 0) ? (prev_page + 1) : 0);
-        return dyn_label_menu_list_of_found[row];
+        return dyn_label_menu_list_of_found[index];
     }
 
-    if (row > 0 && row < 7) {
-        uint16_t index = rg_found_glitches.current_page * RG_MAX_FOUND_GLITCH_PER_PAGE + (row - 1);
-        if (index < rg_found_glitches.count && rg_found_glitches.real_address[index]) {
-            snprintf(dyn_label_menu_list_of_found[row], sizeof(dyn_label_menu_list_of_found[row]), "%06X %s",
-                rg_found_glitches.real_address[index],
-                rg_found_glitches.enabled[index] ? "ON" : "OFF");
+    if (index > 0 && index < 7) {
+        uint16_t i = rg_found_glitches.current_page * RG_MAX_FOUND_GLITCH_PER_PAGE + (index - 1);
+        if (i < rg_found_glitches.count && rg_found_glitches.real_address[i]) {
+            snprintf(dyn_label_menu_list_of_found[index], sizeof(dyn_label_menu_list_of_found[index]), "%06X %s",
+                rg_found_glitches.real_address[i],
+                rg_found_glitches.enabled[i] ? TR(RG_TR_ON) : TR(RG_TR_OFF));
         }
         else {
-            snprintf(dyn_label_menu_list_of_found[row], sizeof(dyn_label_menu_list_of_found[row]), " - - -");
+            snprintf(dyn_label_menu_list_of_found[index], sizeof(dyn_label_menu_list_of_found[index]), " - - -");
         }
 
-        return dyn_label_menu_list_of_found[row];
+        return dyn_label_menu_list_of_found[index];
     }
 
-    if (row == 7) { // next page
+    if (index == 7) { // next page
         uint8_t next_page = (rg_found_glitches.total_pages == 0) ? 0 :
             (rg_found_glitches.current_page + 1) % rg_found_glitches.total_pages;
 
-        snprintf(dyn_label_menu_list_of_found[row], sizeof(dyn_label_menu_list_of_found[row]),
-            "%s %u", menu_list[row].label,
-            (rg_found_glitches.total_pages > 0) ? (next_page + 1) : 0);
-        return dyn_label_menu_list_of_found[row];
+        snprintf(dyn_label_menu_list_of_found[index], sizeof(dyn_label_menu_list_of_found[index]),
+            TR(RG_TR_NEXT_PAGE), (rg_found_glitches.total_pages > 0) ? (next_page + 1) : 0);
+        return dyn_label_menu_list_of_found[index];
     }
 
-    snprintf(dyn_label_menu_list_of_found[row], sizeof(dyn_label_menu_list_of_found[row]), " ");
-    return dyn_label_menu_list_of_found[row];
+    return "";
 }
 
-static const char* get_label_menu_branch_allowed(void) {
-    static uint8_t j = 0;
-    uint8_t row = j;
-    j = (j + 1) % 8;
+static const char* get_label_menu_branch_allowed(uint8_t index) {
+    static const char* branch_items[] = {
+        //"60/61", "62/63", "64/65", "66/67", "68/69", "6A/6B", "6C/6D", "6E/6F"
+        "BRA/BSR", "BHI/BLS", "BCC/BCS", "BNE/BEQ", "BVC/BVS", "BPL/BMI", "BGE/BLT", "BGT/BLE"
+    };
 
-    snprintf(dyn_label_menu_branch_allowed[row], sizeof(dyn_label_menu_branch_allowed[row]), "%s %s",
-        menu_branch[row].label, rg_branch_allowed & (1 << row) ? "ON" : "OFF");
-    return dyn_label_menu_branch_allowed[row];
+    const char* status = (rg_branch_allowed & (1 << index)) ? TR(RG_TR_ON) : TR(RG_TR_OFF);
+
+    snprintf(dyn_label_menu_branch_allowed[index], sizeof(dyn_label_menu_branch_allowed[index]),
+        "%s %s", branch_items[index], status);
+
+    return dyn_label_menu_branch_allowed[index];
 }
 
 static void menu_item_pause_effect(void) {
@@ -158,7 +165,7 @@ static void menu_item_toggle_found_instruction(void) {
         + (rg_menu.current->selected_index - 1);
 
     if (index >= rg_found_glitches.count || !rg_found_glitches.virt_address[index]) {
-        rg_msg("Empty slot", RG_MSG_ERROR);
+        //rg_msg(RG_MSG_ERROR, TR(RG_TR_EMPTY_SLOT)); // Empty slot
         return;
     }
 
@@ -170,6 +177,7 @@ static void menu_item_branch_allowed(void) {
     rg_branch_allowed ^= (1 << rg_menu.current->selected_index);
     rg_game_save_state();
     rg_main.init_done = false;
+    rg_clear_bug_range = true;
     rg_game_reset();
     rg_game_load_state();
     rg_menu_visible = true;
@@ -186,7 +194,7 @@ static void menu_item_next_page(void) {
 }
 
 static void menu_item_open_options(void) { rg_menu.current = &rg_menu.options; }
-static void menu_item_open_list_of_found(void) { rg_menu.current = &rg_menu.list; }
+static void menu_item_open_list_of_found(void) { rg_menu.current = &rg_menu.found; }
 static void menu_item_open_branch_allowed(void) { rg_menu.current = &rg_menu.branch; }
 
 static void menu_item_game_save_state(void) {
@@ -196,7 +204,7 @@ static void menu_item_game_save_state(void) {
     rg_input_replay.length = 0;
 }
 
-// "Отрисовка" меню
+// "РћС‚СЂРёСЃРѕРІРєР°" РјРµРЅСЋ
 void rg_menu_show(void) {
     static uint8_t frame_skip;
 
@@ -208,28 +216,32 @@ void rg_menu_show(void) {
 
     char menu_text[128] = { 0 };
 
-    for (int i = 0; i < rg_menu.current->item_count; i++) {
-        const char* label = rg_menu.current->items[i].get_label ? rg_menu.current->items[i].get_label() : rg_menu.current->items[i].label;
+    for (uint8_t i = 0; i < rg_menu.current->item_count; i++) {
+        const char* label = rg_menu.current->items[i].get_label(i);
+        char buf[128];
 
         if (label && label[0]) {
-            char buf[80];
-            snprintf(buf, sizeof(buf), "%s %s\n", (i == rg_menu.current->selected_index) ? "<>" : "  . ", label);
+            snprintf(buf, sizeof(buf), "%s %s\n", (i == rg_menu.current->selected_index) ? "<>" : " . ", label);
+            strncat(menu_text, buf, sizeof(menu_text) - strlen(menu_text) - 1);
+        }
+        else {
+            snprintf(buf, sizeof(buf), "%s\n", (i == rg_menu.current->selected_index) ? "<>" : " . ");
             strncat(menu_text, buf, sizeof(menu_text) - strlen(menu_text) - 1);
         }
     }
 
     uint8_t len = strlen(menu_text);
-    while (len < 128)
-        menu_text[len++] = ' ';
+    while (len < 125)
+        menu_text[len++] = ' '; // С‡С‚РѕР±С‹ РјРµРЅСЋ Р±С‹Р»Рѕ РїРѕ Р»РµРІРѕРјСѓ РєСЂР°СЋ
 
     struct retro_message_ext msg = {
-        .msg = menu_text,                   // текст сообщения < 128 !
-        .duration = 100,                    // время отображения в мс
-        .priority = 2,                      // приоритет очереди отображения
-        .level = RETRO_LOG_INFO,            // уровень сообщения
-        .target = RETRO_MESSAGE_TARGET_OSD, // только на экран
-        .type = RETRO_MESSAGE_TYPE_STATUS,  // тип (в каком месте экрана выводится)
-        .progress = -1                      // прогресс бар
+        .msg = menu_text,                   // С‚РµРєСЃС‚ СЃРѕРѕР±С‰РµРЅРёСЏ < 128 !
+        .duration = 100,                    // РІСЂРµРјСЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ РјСЃ
+        .priority = 2,                      // РїСЂРёРѕСЂРёС‚РµС‚ РѕС‡РµСЂРµРґРё РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ
+        .level = RETRO_LOG_INFO,            // СѓСЂРѕРІРµРЅСЊ СЃРѕРѕР±С‰РµРЅРёСЏ
+        .target = RETRO_MESSAGE_TARGET_OSD, // С‚РѕР»СЊРєРѕ РЅР° СЌРєСЂР°РЅ
+        .type = RETRO_MESSAGE_TYPE_STATUS,  // С‚РёРї (РІ РєР°РєРѕРј РјРµСЃС‚Рµ СЌРєСЂР°РЅР° РІС‹РІРѕРґРёС‚СЃСЏ)
+        .progress = -1                      // РїСЂРѕРіСЂРµСЃСЃ Р±Р°СЂ
     };
 
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
@@ -237,24 +249,39 @@ void rg_menu_show(void) {
     if (refresh_menu_log) {
         refresh_menu_log = false;
         char log_text[164];
-        char branch_mode[64] = { 0 };
+        char branch_mode[128] = { 0 };
 
         uint32_t percent = (rg_main.range_size * 1000) / rg_main.glitch_count;
 
+        static const char* branch_items[] = {
+             "BRA/BSR" ,
+             "BHI/BLS" ,
+             "BCC/BCS" ,
+             "BNE/BEQ" ,
+             "BVC/BVS" ,
+             "BPL/BMI" ,
+             "BGE/BLT" ,
+             "BGT/BLE"
+        };
+
         for (int i = 0; i < 8; i++)
             if (rg_branch_allowed & (1 << i))
-                snprintf(branch_mode + strlen(branch_mode), sizeof(branch_mode) - strlen(branch_mode), "%s ", menu_branch[i].label);
+                snprintf(branch_mode + strlen(branch_mode), sizeof(branch_mode) - strlen(branch_mode), "%s ", branch_items[i]);
 
-        snprintf(log_text, sizeof(log_text), "Steps:%u (%s)  |  Candidates:%u/%u  |  %u.%u%%  |  Range start:%u size:%u  |  %s",
-            rg_main.step_count, rg_main.localizing ? "LOCAL" : "SEARCH", rg_main.glitch_count, rg_total_glitch_count,
+        snprintf(log_text, sizeof(log_text), "%s %u (%s)  |  %s %u/%u  |  %u.%u%%  |  %s %u:%u  |  %s",
+            TR(RG_TR_STEP),
+            rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_BUG) : rg_main.localizing ? TR(RG_TR_LOCAL) : TR(RG_TR_SEARCH),
+            TR(RG_TR_CANDIDATES),
+            rg_main.glitch_count, rg_total_glitch_count,
             (rg_main.range_size > 0) ? percent / 10 : 0, (rg_main.range_size > 0) ? percent % 10 : 0,
+            TR(RG_TR_RANGE),
             rg_main.range_start, rg_main.range_size, branch_mode);
-        struct retro_message msg_log = { log_text, 100 * rg_fps }; // {текст, время отображения в кадрах}
+        struct retro_message msg_log = { log_text, 100 * rg_fps }; // {С‚РµРєСЃС‚, РІСЂРµРјСЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ РєР°РґСЂР°С…}
         environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_log);
     }
 }
 
-// cкрыть меню
+// cРєСЂС‹С‚СЊ РјРµРЅСЋ
 void rg_menu_hide(void) {
     if (environ_cb) {
         struct retro_message clear_msg_log = { " ", 1 };
@@ -265,58 +292,77 @@ void rg_menu_hide(void) {
     refresh_menu_log = true;
 }
 
-// вывод информационных сообщений на экран
-void rg_msg(const char* s, uint8_t context) {
-    char msg_text[128];
+// РІС‹РІРѕРґ РёРЅС„РѕСЂРјР°С†РёРѕРЅРЅС‹С… СЃРѕРѕР±С‰РµРЅРёР№ РЅР° СЌРєСЂР°РЅ
+void rg_msg(uint8_t context, const char* format, ...) {
+    char message[256];
+    char msg_text[256];
     uint32_t duration = 4000;
-    uint8_t priority = 1; // 0, 1, 2, 3 ... 255, обычно от 0 до 3
+    uint8_t priority = 1; // 0, 1, 2, 3 ... 255, РѕР±С‹С‡РЅРѕ РѕС‚ 0 РґРѕ 3
     uint8_t level = RETRO_LOG_DEBUG; // RETRO_LOG_DEBUG, RETRO_LOG_INFO, RETRO_LOG_WARN, RETRO_LOG_ERROR
     // RETRO_MESSAGE_TYPE_NOTIFICATION, RETRO_MESSAGE_TYPE_NOTIFICATION_ALT, RETRO_MESSAGE_TYPE_STATUS, RETRO_MESSAGE_TYPE_PROGRESS
     uint8_t type = RETRO_MESSAGE_TYPE_NOTIFICATION;
     int8_t progress = -1;
 
-    if (context == RG_MSG_INFO) {
-        snprintf(msg_text, sizeof(msg_text), "RG: %s.", s);
-        priority = 1;
-        level = RETRO_LOG_INFO;
-    }
-    else if (context == RG_MSG_ERROR) {
-        snprintf(msg_text, sizeof(msg_text), "RG ERROR: %s.", s);
-        priority = 4;
-        level = RETRO_LOG_ERROR;
-    }
-    else if (context == RG_MSG_FOUND) {
-        snprintf(msg_text, sizeof(msg_text), "RG FOUND: %s.", s);
-        duration = 10000;
-        priority = 5;
-        level = RETRO_LOG_INFO;
-    }
-    else if (context == RG_MSG_REPLAY_PLAY) {
-        snprintf(msg_text, sizeof(msg_text), "RG REPLAY: PLAYBACK ('Menu' to stop). Steps %d [%s]",
-            rg_main.step_count, rg_main.localizing ? "L" : "S");
-        duration = 33;
-        priority = 6;
-        level = RETRO_LOG_INFO;
-        type = RETRO_MESSAGE_TYPE_PROGRESS;
-        progress = atoi(s);
-    }
-    else if (context == RG_MSG_REPLAY_REC) {
-        snprintf(msg_text, sizeof(msg_text), "RG REPLAY: RECORD ('Menu' to finish).");
-        duration = 33;
-        priority = 6;
-        level = RETRO_LOG_INFO;
-        type = RETRO_MESSAGE_TYPE_PROGRESS;
-        progress = atoi(s);
+    va_list args;
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+
+    switch (context) {
+        case RG_MSG_INFO: {
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_INFO), message);
+            level = RETRO_LOG_INFO;
+            break;
+        }
+        case RG_MSG_ERROR: {
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_ERROR), message);
+            priority = 4;
+            level = RETRO_LOG_ERROR;
+            break;
+        }
+        case RG_MSG_FOUND: {
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_FOUND), message);
+            duration = 10000;
+            priority = 5;
+            level = RETRO_LOG_INFO;
+            break;
+        }
+        case RG_MSG_REPLAY_PLAY: {
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_PLAYBACK),
+                rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_B) : rg_main.localizing ? TR(RG_TR_L) : TR(RG_TR_S));
+            duration = 33;
+            priority = 6;
+            level = RETRO_LOG_INFO;
+            type = RETRO_MESSAGE_TYPE_PROGRESS;
+            progress = atoi(message);
+            break;
+        }
+        case RG_MSG_REPLAY_REC: {
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_RECORD));
+            duration = 33;
+            priority = 6;
+            level = RETRO_LOG_INFO;
+            type = RETRO_MESSAGE_TYPE_PROGRESS;
+            progress = atoi(message);
+            break;
+        }
+        case RG_MSG_DEBUG: {
+            return;
+            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_DEBUG), message);
+            break;
+        }
+        default:
+            break;
     }
 
     struct retro_message_ext msg = {
-        .msg = msg_text,                         // текст сообщения
-        .duration = duration,                    // время отображения в мс
-        .priority = priority,                    // приоритет очереди отображения
-        .level = level,                          // уровень сообщения (иконка сообщения)
-        .target = RETRO_MESSAGE_TARGET_OSD,      // только на экран
-        .type = type,                            // тип
-        .progress = progress                     // прогресс бар
+        .msg = msg_text,                         // С‚РµРєСЃС‚ СЃРѕРѕР±С‰РµРЅРёСЏ
+        .duration = duration,                    // РІСЂРµРјСЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ РјСЃ
+        .priority = priority,                    // РїСЂРёРѕСЂРёС‚РµС‚ РѕС‡РµСЂРµРґРё РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ
+        .level = level,                          // СѓСЂРѕРІРµРЅСЊ СЃРѕРѕР±С‰РµРЅРёСЏ (РёРєРѕРЅРєР° СЃРѕРѕР±С‰РµРЅРёСЏ)
+        .target = RETRO_MESSAGE_TARGET_OSD,      // С‚РѕР»СЊРєРѕ РЅР° СЌРєСЂР°РЅ
+        .type = type,                            // С‚РёРї
+        .progress = progress                     // РїСЂРѕРіСЂРµСЃСЃ Р±Р°СЂ
     };
 
     environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);

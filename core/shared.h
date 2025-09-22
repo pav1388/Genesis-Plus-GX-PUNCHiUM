@@ -39,6 +39,7 @@
 #include "rom_glitcher.h"
 #include "rom_glitcher_menu.h"
 #include "rom_glitcher_opcode_valid.h"
+#include "rom_glitcher_translation.h"
 
 #endif /* _SHARED_H_ */
 

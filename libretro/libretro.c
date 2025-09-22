@@ -3170,7 +3170,10 @@ size_t retro_serialize_size(void) { return STATE_SIZE; }
 
 bool retro_serialize(void *data, size_t size)
 { 
-   if (size != STATE_SIZE)
+    if(rg_menu_visible)
+        rg_menu_hide();
+
+    if (size != STATE_SIZE)
       return FALSE;
 
    state_save(data);
@@ -3180,7 +3183,10 @@ bool retro_serialize(void *data, size_t size)
 
 bool retro_unserialize(const void *data, size_t size)
 {
-   if (size != STATE_SIZE)
+    if (rg_menu_visible)
+        rg_menu_hide();
+
+    if (size != STATE_SIZE)
       return FALSE;
 
    if (!state_load((uint8_t*)data))
