@@ -1,6 +1,9 @@
 // rom_glitcher_translation.c
 
+//#include "shared.h"
+#include "rom_glitcher_translation.h"
 #include "shared.h"
+#include <stdint.h>
 
 /* 
     RETRO_LANGUAGE_ENGLISH             = 0,     +
@@ -27,6 +30,8 @@
     RETRO_LANGUAGE_HEBREW              = 21,
     RETRO_LANGUAGE_ASTURIAN            = 22,
     RETRO_LANGUAGE_FINNISH             = 23,
+
+    ENGLISH RUSSIAN SPANISH PORTUGUESE_BRAZIL GERMAN ITALIAN
 */
 
 static enum retro_language current_language = RETRO_LANGUAGE_ENGLISH;
@@ -41,7 +46,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Launch Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "List of found",
-            [RG_TR_BRANCH_ALLOWED] = "Branch allowed",
+            [RG_TR_INSTRUCTION_FILTER] = "Instruction Filter",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Arithmetic '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Branching",
+            [RG_TR_INSTRUCTION_SETTING] = "Setting",
+            [RG_TR_INSTRUCTION_LOOPING] = "Looping",
             [RG_TR_STOP_GLITCHER] = "Stop Glitcher",
             [RG_TR_OPTIONS] = "Options",
             [RG_TR_SEARCH_HEADER] = "[%s]Bug [%s]NOT found [%s]Found [%s]Back",
@@ -91,7 +100,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Зaпуcк Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "Нaйдeнныe",
-            [RG_TR_BRANCH_ALLOWED] = "Ветвления",
+            [RG_TR_INSTRUCTION_FILTER] = "Фильтp инcтрукций",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Аpифмeтика '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Вeтвлeния",
+            [RG_TR_INSTRUCTION_SETTING] = "Уcтaнoвкa",
+            [RG_TR_INSTRUCTION_LOOPING] = "Циклы",
             [RG_TR_STOP_GLITCHER] = "Ocтaнoвкa Glitcher",
             [RG_TR_OPTIONS] = "Oпции",
             [RG_TR_SEARCH_HEADER] = "[%s]Бaг [%s]Нe нaйдeн [%s]Нaйдeн [%s]Нaзaд",
@@ -141,7 +154,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Lanzar Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "Lista de encontrados",
-            [RG_TR_BRANCH_ALLOWED] = "Ramas permitidas",
+            [RG_TR_INSTRUCTION_FILTER] = "Filtro de instrucciones",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Aritmética '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Bifurcación",
+            [RG_TR_INSTRUCTION_SETTING] = "Configuración",
+            [RG_TR_INSTRUCTION_LOOPING] = "Bucleo",
             [RG_TR_STOP_GLITCHER] = "Detener Glitcher",
             [RG_TR_OPTIONS] = "Opciones",
             [RG_TR_SEARCH_HEADER] = "[%s]Error [%s]NO encontrado [%s]Encontrado [%s]Atrás",
@@ -191,7 +208,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Iniciar Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "Lista de encontrados",
-            [RG_TR_BRANCH_ALLOWED] = "Ramos permitidos",
+            [RG_TR_INSTRUCTION_FILTER] = "Filtro de instruções",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Aritmética '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Ramificação",
+            [RG_TR_INSTRUCTION_SETTING] = "Definição",
+            [RG_TR_INSTRUCTION_LOOPING] = "Looping",
             [RG_TR_STOP_GLITCHER] = "Parar Glitcher",
             [RG_TR_OPTIONS] = "Opções",
             [RG_TR_SEARCH_HEADER] = "[%s]Bug [%s]NÃO encontrado [%s]Encontrado [%s]Voltar",
@@ -241,7 +262,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Starte Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "Liste der Funde",
-            [RG_TR_BRANCH_ALLOWED] = "Verzweigungen erlaubt",
+            [RG_TR_INSTRUCTION_FILTER] = "Befehlsfilter",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Arithmetik '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Verzweigung",
+            [RG_TR_INSTRUCTION_SETTING] = "Setzen",
+            [RG_TR_INSTRUCTION_LOOPING] = "Schleifen",
             [RG_TR_STOP_GLITCHER] = "Stoppe Glitcher",
             [RG_TR_OPTIONS] = "Optionen",
             [RG_TR_SEARCH_HEADER] = "[%s]Fehler [%s]NICHT gefunden [%s]Gefunden [%s]Zurück",
@@ -291,7 +316,11 @@ static struct {
         .strings = {
             [RG_TR_LAUNCH_GLITCHER] = "Avvia Glitcher " RG_VERSION,
             [RG_TR_LIST_OF_FOUND] = "Lista dei trovati",
-            [RG_TR_BRANCH_ALLOWED] = "Rami permessi",
+            [RG_TR_INSTRUCTION_FILTER] = "Filtro istruzioni",
+            [RG_TR_INSTRUCTION_ARITHMETIC] = "Aritmetica '+-'",
+            [RG_TR_INSTRUCTION_BRANCHING] = "Branching",
+            [RG_TR_INSTRUCTION_SETTING] = "Impostazione",
+            [RG_TR_INSTRUCTION_LOOPING] = "Cicli",
             [RG_TR_STOP_GLITCHER] = "Ferma Glitcher",
             [RG_TR_OPTIONS] = "Opzioni",
             [RG_TR_SEARCH_HEADER] = "[%s]Bug [%s]NON trovato [%s]Trovato [%s]Indietro",

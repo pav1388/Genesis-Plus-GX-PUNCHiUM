@@ -3170,7 +3170,7 @@ size_t retro_serialize_size(void) { return STATE_SIZE; }
 
 bool retro_serialize(void *data, size_t size)
 { 
-    if(rg_menu_visible)
+    if(rg_menu_visible) // ROM Glitcher
         rg_menu_hide();
 
     if (size != STATE_SIZE)
@@ -3183,7 +3183,7 @@ bool retro_serialize(void *data, size_t size)
 
 bool retro_unserialize(const void *data, size_t size)
 {
-    if (rg_menu_visible)
+    if (rg_menu_visible) // ROM Glitcher
         rg_menu_hide();
 
     if (size != STATE_SIZE)
@@ -3695,8 +3695,7 @@ void retro_reset(void)
 
 void retro_run(void) 
 {
-    // ROM Glitcher
-    if (rg_menu_button != RG_DISABLED_KEY)
+    if (rg_menu_button != RG_DISABLED_KEY) // ROM Glitcher
     {
         rg_handle_input(&bitmap, &vwidth, &vheight);
 

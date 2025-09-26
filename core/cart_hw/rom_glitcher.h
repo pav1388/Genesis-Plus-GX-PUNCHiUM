@@ -3,26 +3,24 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_VERSION "v0.3.0"
+#define RG_DEBUG 1
+#define RG_VERSION_BASE "v0.3.1"
 #define RG_DISABLED_KEY                 -2  // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
-#define RG_MAX_FOUND_GLITCH_PER_PAGE    6
-#define RG_MAX_REPLAY_FRAMES            3600    // 60 FPS * 60 sec
-#define RG_MAX_REPLAY_GAMEPADS          2   // port 0 and 1
+#define RG_PATH_SIZE                    512
+#define RG_MAX_REPLAY_FRAMES            7200    // 60 FPS * 120 sec
+#define RG_MAX_REPLAY_GAMEPADS          2       // port 0 and 1
 
-#define RG_MSG_DEBUG        0
-#define RG_MSG_INFO         1
-#define RG_MSG_ERROR        2
-#define RG_MSG_FOUND        3
-#define RG_MSG_REPLAY_REC   4
-#define RG_MSG_REPLAY_PLAY  5
+#if RG_DEBUG
+    #define RG_VERSION RG_VERSION_BASE "-dev"
+#else
+    #define RG_VERSION RG_VERSION_BASE
+#endif
 
+#include "shared.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdarg.h>
 
 typedef struct {
     uint32_t address;
@@ -48,10 +46,10 @@ typedef struct {
 } rom_glitcher_button_state_t;
 
 typedef struct {
-    uint8_t count;
-    uint8_t enabled_count;
-    uint8_t current_page;
-    uint8_t total_pages;
+    uint16_t count;
+    uint16_t enabled_count;
+    uint16_t current_page;
+    uint16_t total_pages;
     uint32_t virt_address[RG_MAX_FOUND_GLITCH_SLOTS];
     uint32_t real_address[RG_MAX_FOUND_GLITCH_SLOTS];
     uint8_t initial_value[RG_MAX_FOUND_GLITCH_SLOTS];
@@ -114,8 +112,8 @@ extern bool rg_rom_in_mdx;
 extern bool rg_rom_is_byte_swapped;
 extern bool rg_rom_has_header;
 extern bool rg_rom_was_deinterleaved;
-extern char rg_log[1024];
 extern bool rg_clear_bug_range;
+//extern char rg_log[1024];
 
 extern bool libretro_supports_bitmasks;
 extern char g_rom_dir[256];
