@@ -3,8 +3,8 @@
 #ifndef _ROM_GLITCHER_H_
 #define _ROM_GLITCHER_H_
 
-#define RG_DEBUG 1
-#define RG_VERSION_BASE "v0.3.1"
+#define RG_DEBUG 0
+#define RG_VERSION_BASE "v0.3.2"
 #define RG_DISABLED_KEY                 -2  // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
@@ -38,6 +38,7 @@ typedef struct {
     bool localizing;
     bool launch_done;
     bool init_done;
+    uint8_t range_size_adj;
 } rom_glitcher_main_t;
 
 typedef struct {
@@ -131,8 +132,6 @@ void rg_game_reset(void);
 void rg_game_save_state(void);
 void rg_game_load_state(void);
 void rg_launch_glitcher(void);
-uint32_t rg_virt_to_real_rom_offset(uint32_t address);
-uint32_t rg_real_to_virt_rom_offset(uint32_t address);
 void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheight);
 
 #endif

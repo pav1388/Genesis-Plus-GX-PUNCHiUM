@@ -43,6 +43,9 @@
 /* skip                 30 */
 /* skip                 31 */
 
+#define VIRT_TO_REAL true
+#define REAL_TO_VIRT false
+
 #include "rom_glitcher.h"
 #include "rom_glitcher_menu.h"
 #include "rom_glitcher_translation.h"
@@ -61,7 +64,10 @@ static void remove_one_bug_from_rg_backup(uint32_t del_addr);
 static void remove_one_bug_from_all_bug_range(uint32_t del_addr);
 static void step4_back(void);
 static bool cheats_file_parse(void);
-static bool cheats_file_save(uint32_t real_address, uint8_t initial_value, uint8_t mod_value);
+static bool cheats_file_save(uint32_t real_address, 
+    uint8_t initial_value, uint8_t mod_value, char* file_path, int file_path_size);
+static void free_and_reset_memory(void);
+static uint32_t address_offset_calculation(uint32_t address, bool direction);
 
 rom_glitcher_main_t rg_main = {
     .glitch = NULL,
@@ -70,6 +76,7 @@ rom_glitcher_main_t rg_main = {
     .range_size = 0,
     .step_count = 0,
     .seed = 19881029,
+    .range_size_adj = 0,
     .localizing = false,
     .launch_done = false,
     .init_done = false
@@ -381,7 +388,13 @@ static void step1_bug(void) {
         }
         else {
             rg_main.range_start = 0;
-            rg_main.range_size -= rg_main.range_size / 2;
+            //rg_main.range_size -= rg_main.range_size / 2;
+            if (rg_main.range_size_adj < 2)
+                rg_main.range_size -= rg_main.range_size / 2;
+            else
+                rg_main.range_size *= 3;
+
+            rg_main.range_size_adj = (rg_main.range_size_adj + 1) % 3;
 
             if (!rg_main.localizing)
                 instructions_shuffle();
@@ -432,7 +445,14 @@ static void step2_not_found(void) {
         else {
             rg_main.glitch_count = rg_main.range_start;
             rg_main.range_start = 0;
-            rg_main.range_size -= rg_main.range_size / 2;
+            //rg_main.range_size -= rg_main.range_size / 2;
+            if (rg_main.range_size_adj < 2)
+                rg_main.range_size -= rg_main.range_size / 2;
+            else
+                rg_main.range_size *= 3;
+
+            rg_main.range_size_adj = (rg_main.range_size_adj + 1) % 3;
+
 
             if (!rg_main.localizing)
                 instructions_shuffle();
@@ -541,14 +561,16 @@ static void step3_found(void) {
         rg_found_glitches.mod_value[rg_found_glitches.count] = rg_main.glitch[0].mod_value;
         rg_found_glitches.enabled[rg_found_glitches.count] = true;
         rg_found_glitches.virt_address[rg_found_glitches.count] = rg_main.glitch[0].address;
-        rg_found_glitches.real_address[rg_found_glitches.count] = rg_virt_to_real_rom_offset(rg_found_glitches.virt_address[rg_found_glitches.count]);
-        cheats_file_save(rg_found_glitches.real_address[rg_found_glitches.count], rg_found_glitches.initial_value[rg_found_glitches.count], rg_found_glitches.mod_value[rg_found_glitches.count]);
+        rg_found_glitches.real_address[rg_found_glitches.count] = address_offset_calculation(rg_found_glitches.virt_address[rg_found_glitches.count], VIRT_TO_REAL);
+        char file_path[128] = { 0 };
+        cheats_file_save(rg_found_glitches.real_address[rg_found_glitches.count], rg_found_glitches.initial_value[rg_found_glitches.count], rg_found_glitches.mod_value[rg_found_glitches.count], file_path, sizeof(file_path));
 
         rg_found_glitches.count++;
         rg_found_glitches.total_pages =
             (rg_found_glitches.count + RG_FOUND_GLITCH_PER_PAGE - 1) / RG_FOUND_GLITCH_PER_PAGE;
 
-        rg_msg(RG_MSG_FOUND, "%s %u. %s %u. ROM '0x%06X' (0x%02X->0x%02X)", TR(RG_TR_GLITCH), rg_found_glitches.count,
+        rg_msg(RG_MSG_FOUND, "%s\n%s %u. %s %u. ROM '0x%06X' (0x%02X->0x%02X)", file_path,
+            TR(RG_TR_GLITCH), rg_found_glitches.count,
             TR(RG_TR_STEP), rg_main.step_count, 
             rg_found_glitches.real_address[rg_found_glitches.count - 1],
             rg_found_glitches.initial_value[rg_found_glitches.count - 1], 
@@ -942,7 +964,7 @@ static void apply_glitches(void) {
 
     need_load_state = true;
 }
-
+ 
 // поиск инструкций в ROM
 static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t* prev_found_count) {
     uint32_t trim = rg_rom_has_header ? 0 : 0x200;
@@ -1190,6 +1212,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         return;
     }
 
+    free_and_reset_memory();
     rg_get_language();
     cheats_file_parse();
     apply_found_glitches();
@@ -1205,35 +1228,6 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
         }
     }
 
-    for (int i = 0; i < RG_MAX_BACKUP_SLOTS; i++) {
-        if (rg_backup[i].glitch) {
-            free(rg_backup[i].glitch);
-            rg_backup[i].glitch = NULL;
-            memset(&rg_backup[i], 0, sizeof(rg_backup[i]));
-        }
-    }
-    rg_backup_index = 0;
-    rg_backup_count = 0;
-
-    if (rg_main.glitch) {
-        free(rg_main.glitch);
-        rg_main.glitch = NULL;
-    }
-
-    if (bug_range && rg_clear_bug_range) {
-        for (int i = 0; i < bug_range_count; i++) {
-            free(bug_range[i].glitch);
-            bug_range[i].glitch = NULL;
-            bug_range[i].glitch_count = 0;
-        }
-
-        free(bug_range);
-        bug_range = NULL;
-        bug_range_count = 0;
-        bug_range_capacity = 0;
-        rg_clear_bug_range = false;
-    }
-
     uint16_t prev_found_count = 0;
     rg_main.init_done = instructions_scan_rom(rom_data, rom_size, &prev_found_count);
 
@@ -1242,25 +1236,27 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 #endif // RANDOM_SEED
     struct retro_system_av_info av_info;
     retro_get_system_av_info(&av_info);
-    rg_fps = (uint8_t)(av_info.timing.fps + 0.5);
+    rg_fps = (uint16_t)(av_info.timing.fps + 0.5);
     rg_fps = rg_fps > 0 ? rg_fps : 60;
     need_load_state = false;
     load_step_before_local = false;
+    rg_found_glitches_modified = false; 
     rg_found_glitches.current_page = 0;
-    rg_found_glitches_modified = false;
-    rg_found_glitches.total_pages = 
-        rg_found_glitches.count ? ((rg_found_glitches.count + RG_FOUND_GLITCH_PER_PAGE - 1) 
-            / RG_FOUND_GLITCH_PER_PAGE) : 1;
+    rg_found_glitches.total_pages = rg_found_glitches.count > 0 ?
+        ((rg_found_glitches.count + RG_FOUND_GLITCH_PER_PAGE - 1) / RG_FOUND_GLITCH_PER_PAGE)
+        : 1;
     rg_input_replay.record = false;
     rg_input_replay.play = false;
     rg_input_replay.length = 0;
     rg_main.step_count = 0;
     rg_main.localizing = false;
     rg_main.launch_done = false;
+    rg_total_glitch_count = rg_main.glitch_count;
+    rg_main.range_size_adj = 0;
     rg_main.range_start = 0;
     //rg_main.range_size = (rg_main.glitch_count + 31) / 32; // 3% от всех кандидатов
     rg_main.range_size = (rg_main.glitch_count + 15) / 16; // 6% от всех кандидатов
-    rg_total_glitch_count = rg_main.glitch_count;
+     
     rg_msg(rg_main.init_done ? RG_MSG_INFO : RG_MSG_ERROR,
         prev_found_count > 0 ? "%s %u (%s %u)" : "%s %u",
         TR(RG_TR_CANDIDATES),
@@ -1337,10 +1333,17 @@ void rg_force_stop_glitcher(void) {
     rg_game_load_state();
 }
 
-// очистка памяти при закрытии ядра
-void rg_deinit(void) {
-    rg_menu_hide();
-    
+static void free_and_reset_memory(void) {
+    for (int i = 0; i < RG_MAX_BACKUP_SLOTS; i++) {
+        if (rg_backup[i].glitch) {
+            free(rg_backup[i].glitch);
+            rg_backup[i].glitch = NULL;
+            memset(&rg_backup[i], 0, sizeof(rg_backup[i]));
+        }
+    }
+    rg_backup_index = 0;
+    rg_backup_count = 0;
+
     if (rg_main.glitch) {
         free(rg_main.glitch);
         rg_main.glitch = NULL;
@@ -1351,80 +1354,94 @@ void rg_deinit(void) {
         rg_backup_before_local.glitch = NULL;
     }
 
-    for (int i = 0; i < RG_MAX_BACKUP_SLOTS; i++) {
-        if (rg_backup[i].glitch) {
-            free(rg_backup[i].glitch);
-            rg_backup[i].glitch = NULL;
-        }
-    }
-
-    if (bug_range) {
+    if (bug_range && rg_clear_bug_range) {
         for (int i = 0; i < bug_range_count; i++) {
             free(bug_range[i].glitch);
             bug_range[i].glitch = NULL;
+            bug_range[i].glitch_count = 0;
         }
 
         free(bug_range);
         bug_range = NULL;
-    }
-}
-
-// Преобразование найденного адреса глитча из
-// виртуального ROM эмулятора в реальный ROM адрес
-uint32_t rg_virt_to_real_rom_offset(uint32_t address) {
-    uint32_t file_offset = address;
-
-    if (rg_rom_was_deinterleaved) {
-        uint32_t block = address / 0x4000;
-        uint32_t offset = address % 0x4000;
-
-        if ((offset % 2) == 0)
-            file_offset = block * 0x4000 + 0x2000 + (offset / 2);
-        else
-            file_offset = block * 0x4000 + (offset / 2);
+        bug_range_count = 0;
+        bug_range_capacity = 0;
+        rg_clear_bug_range = false;
     }
 
-    if (rg_rom_has_header)
-        file_offset += 512;
-
-    if (rg_rom_is_byte_swapped)
-        file_offset ^= 1;
-
-    if (rg_rom_in_mdx)
-        file_offset += 4;
-
-    return file_offset;
+    for (int i = 0; i < rg_found_glitches.count; i++) {
+        rg_found_glitches.virt_address[i] = 0;
+        rg_found_glitches.real_address[i] = 0;
+        rg_found_glitches.initial_value[i] = 0;
+        rg_found_glitches.mod_value[i] = 0;
+        rg_found_glitches.enabled[i] = false;
+    }
+    rg_found_glitches.count = 0;
+    rg_found_glitches.enabled_count = 0;
+    rg_found_glitches.current_page = 0;
+    rg_found_glitches.total_pages = 0;
 }
 
-// Преобразование найденного адреса глитча из
-// реального ROM в виртуальный ROM эмулятора
-uint32_t rg_real_to_virt_rom_offset(uint32_t address) {
-    uint32_t virt_offset = address;
+// очистка памяти при закрытии ядра
+void rg_deinit(void) {
+    rg_clear_bug_range = true;
+    rg_menu_hide();
+    free_and_reset_memory();
+}
 
-    if (rg_rom_in_mdx)
-        virt_offset -= 4;
+// вычисление адреса смещения между реальным и виртуальным ROM
+static uint32_t address_offset_calculation(uint32_t address, bool direction) {
+    uint32_t addr = address;
 
-    if (rg_rom_is_byte_swapped)
-        virt_offset ^= 1;
+    // VIRT_TO_REAL
+    if (direction) { 
+        if (rg_rom_was_deinterleaved) {
+            uint32_t block = address / 0x4000;
+            uint32_t offset = address % 0x4000;
 
-    if (rg_rom_has_header)
-        virt_offset -= 512;
+            if ((offset % 2) == 0)
+                addr = block * 0x4000 + 0x2000 + (offset / 2);
+            else
+                addr = block * 0x4000 + (offset / 2);
+        }
 
-    if (rg_rom_was_deinterleaved) {
-        uint32_t block = virt_offset / 0x4000;
-        uint32_t offset = virt_offset % 0x4000;
+        if (rg_rom_has_header)
+            addr += 512;
 
-        if (offset < 0x2000)
-            virt_offset = block * 0x4000 + (offset * 2 + 1);
-        else
-            virt_offset = block * 0x4000 + ((offset - 0x2000) * 2);
+        if (rg_rom_is_byte_swapped)
+            addr ^= 1;
+
+        if (rg_rom_in_mdx)
+            addr += 4;
+    }
+    // REAL_TO_VIRT
+    else {
+        if (rg_rom_in_mdx)
+            addr -= 4;
+
+        if (rg_rom_is_byte_swapped)
+            addr ^= 1;
+
+        if (rg_rom_has_header)
+            addr -= 512;
+
+        if (rg_rom_was_deinterleaved) {
+            uint32_t block = addr / 0x4000;
+            uint32_t offset = addr % 0x4000;
+
+            if (offset < 0x2000)
+                addr = block * 0x4000 + (offset * 2 + 1);
+            else
+                addr = block * 0x4000 + ((offset - 0x2000) * 2);
+        }
     }
 
-    return virt_offset;
+    return addr;
 }
 
-// сохранения найденного адреса в чит-файл в папку с ROM файлом
-static bool cheats_file_save(uint32_t real_address, uint8_t initial_value, uint8_t mod_value) {
+// сохранение найденного адреса в чит-файл в папку с ROM файлом
+static bool cheats_file_save(uint32_t real_address, 
+    uint8_t initial_value, uint8_t mod_value, 
+        char* file_path, int file_path_size) {
     char cheats_path[RG_PATH_SIZE] = { 0 };
     RFILE* f_cht = NULL;
 
@@ -1548,7 +1565,10 @@ static bool cheats_file_save(uint32_t real_address, uint8_t initial_value, uint8
     free(file_content);
     free(new_file);
 
-    rg_msg(RG_MSG_FOUND, "%s \"%s%s\"", TR(RG_TR_GLITCH_SAVED_TO),
+    /*rg_msg(RG_MSG_FOUND, "%s \"%s%s\"", TR(RG_TR_GLITCH_SAVED_TO),
+        (strlen(cheats_path) > 90) ? "..." : "",
+        (strlen(cheats_path) > 90) ? cheats_path + (strlen(cheats_path) - 87) : cheats_path);*/
+    snprintf(file_path, file_path_size, "%s%s",
         (strlen(cheats_path) > 90) ? "..." : "",
         (strlen(cheats_path) > 90) ? cheats_path + (strlen(cheats_path) - 87) : cheats_path);
 
@@ -1616,7 +1636,7 @@ static bool cheats_file_parse(void) {
                     // Если у нас есть код чита, обрабатываем полный блок
                     if (has_code) {
                         rg_found_glitches.real_address[rg_found_glitches.count] = current_address;
-                        rg_found_glitches.virt_address[rg_found_glitches.count] = rg_real_to_virt_rom_offset(current_address);
+                        rg_found_glitches.virt_address[rg_found_glitches.count] = address_offset_calculation(current_address, REAL_TO_VIRT);
                         rg_found_glitches.mod_value[rg_found_glitches.count] = current_mod_value;
                         rg_found_glitches.initial_value[rg_found_glitches.count] = current_mod_value ^ 1;
 
@@ -1638,10 +1658,6 @@ static bool cheats_file_parse(void) {
     }
 
     filestream_close(f_cht);
-
-    rg_found_glitches.total_pages =
-        (rg_found_glitches.count + RG_FOUND_GLITCH_PER_PAGE - 1) / RG_FOUND_GLITCH_PER_PAGE;
-
     return false;
 }
 
@@ -1740,7 +1756,7 @@ static void remove_not_found_range_from_bug_range(uint32_t remove_size) {
                         (br->glitch_count - k - 1) * sizeof(rom_glitcher_glitch_t));
                     br->glitch_count--;
 
-                    /*if (br->glitch_count == 1) {
+                    if (br->glitch_count == 1) {
                         rg_bug_glitches.address[rg_bug_glitches.count] = br->glitch[0].address;
                         rg_bug_glitches.initial_value[rg_bug_glitches.count] = br->glitch[0].initial_value;
                         rg_bug_glitches.mod_value[rg_bug_glitches.count] = br->glitch[0].mod_value;
@@ -1751,8 +1767,7 @@ static void remove_not_found_range_from_bug_range(uint32_t remove_size) {
                         br->hash.part1 = 0;
                         br->hash.part2 = 0;
                     }
-                    else*/ 
-                    if (br->glitch_count > 0) {
+                    else if (br->glitch_count > 0) {
                         rom_glitcher_glitch_t* tmp =
                             realloc(br->glitch, br->glitch_count * sizeof(rom_glitcher_glitch_t));
                         if (tmp)
@@ -1804,7 +1819,8 @@ static void bug_range_comparison(const rom_glitcher_bug_range_t* src,
             ident_glitch[ident_count++] = dst->glitch[dst_i];
     }
 
-    if (dst->glitch_count == 1 && ident_count == 1) {
+    //if (dst->glitch_count == 1 && ident_count == 1) {
+    /*if (dst->glitch_count == 1) {
         rg_bug_glitches.address[rg_bug_glitches.count] = dst->glitch[0].address;
         rg_bug_glitches.initial_value[rg_bug_glitches.count] = dst->glitch[0].initial_value;
         rg_bug_glitches.mod_value[rg_bug_glitches.count] = dst->glitch[0].mod_value;
@@ -1816,7 +1832,7 @@ static void bug_range_comparison(const rom_glitcher_bug_range_t* src,
         dst->hash.part2 = 0;
         free(ident_glitch);
         return;
-    }
+    }*/
 
     if (ident_count > 0) {
         free(dst->glitch);
@@ -1832,7 +1848,7 @@ static void bug_range_comparison(const rom_glitcher_bug_range_t* src,
 
 static void detect_bug(void) {
     if (bug_range_count >= bug_range_capacity) {
-        uint32_t temp_capacity = bug_range_capacity + 128;
+        uint32_t temp_capacity = bug_range_capacity + 256;
 
         if (temp_capacity >= UINT16_MAX) {
             // Over 65,000 bug-steps. Start new search
@@ -1876,7 +1892,7 @@ static void detect_bug(void) {
         if ((__builtin_popcount(diff1) + __builtin_popcount(diff2)) <= 1) {
             bug_range_comparison(br, &bug_range[i]);
             
-            /*if (bug_range[i].glitch_count == 1) {
+            if (bug_range[i].glitch_count == 1) {
                 rg_bug_glitches.address[rg_bug_glitches.count] = bug_range[i].glitch[0].address;
                 rg_bug_glitches.initial_value[rg_bug_glitches.count] = bug_range[i].glitch[0].initial_value;
                 rg_bug_glitches.mod_value[rg_bug_glitches.count] = bug_range[i].glitch[0].mod_value;
@@ -1886,7 +1902,7 @@ static void detect_bug(void) {
                 bug_range[i].glitch_count = 0;
                 bug_range[i].hash.part1 = 0;
                 bug_range[i].hash.part2 = 0;
-            }*/
+            }
 
             match_hash = true;
         }

@@ -481,9 +481,9 @@ void rg_menu_hide(void) {
 }
 
 // вывод информационных сообщений на экран
-void rg_msg(uint8_t context, const char* format, ...) {
-    char message[256];
-    char msg_text[256];
+void rg_msg(uint8_t context, const char* raw_msg, ...) {
+    char raw_msg_next[256];
+    char msg[256];
     uint32_t duration = 4000;
     uint8_t priority = 1; // 0, 1, 2, 3 ... 255, обычно от 0 до 3
     uint8_t level = RETRO_LOG_INFO; // RETRO_LOG_DEBUG, RETRO_LOG_INFO, RETRO_LOG_WARN, RETRO_LOG_ERROR
@@ -492,49 +492,49 @@ void rg_msg(uint8_t context, const char* format, ...) {
     int8_t progress = -1;
 
     va_list args;
-    va_start(args, format);
-    vsnprintf(message, sizeof(message), format, args);
+    va_start(args, raw_msg);
+    vsnprintf(raw_msg_next, sizeof(raw_msg_next), raw_msg, args);
     va_end(args);
 
     switch (context) {
+        case RG_MSG_REPLAY_PLAY: {
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_PLAYBACK),
+                rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_B) : rg_main.localizing ? TR(RG_TR_L) : TR(RG_TR_S));
+            duration = 33;
+            priority = 6;
+            type = RETRO_MESSAGE_TYPE_PROGRESS;
+            progress = atoi(raw_msg_next);
+            break;
+        }
         case RG_MSG_INFO: {
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_INFO), message);
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_INFO), raw_msg_next);
             break;
         }
         case RG_MSG_ERROR: {
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_ERROR), message);
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_ERROR), raw_msg_next);
             priority = 4;
             level = RETRO_LOG_ERROR;
             break;
         }
         case RG_MSG_FOUND: {
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_FOUND), message);
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_FOUND), raw_msg_next);
             duration = 10000;
             priority = 5;
             break;
         }
-        case RG_MSG_REPLAY_PLAY: {
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_PLAYBACK),
-                rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_B) : rg_main.localizing ? TR(RG_TR_L) : TR(RG_TR_S));
-            duration = 33;
-            priority = 6;
-            type = RETRO_MESSAGE_TYPE_PROGRESS;
-            progress = atoi(message);
-            break;
-        }
         case RG_MSG_REPLAY_REC: {
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_RECORD));
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_RECORD));
             duration = 33;
             priority = 6;
             type = RETRO_MESSAGE_TYPE_PROGRESS;
-            progress = atoi(message);
+            progress = atoi(raw_msg_next);
             break;
         }
         case RG_MSG_DEBUG: {
 #if !RG_DEBUG
             return;
 #endif
-            snprintf(msg_text, sizeof(msg_text), TR(RG_TR_RG_DEBUG), message);
+            snprintf(msg, sizeof(msg), TR(RG_TR_RG_DEBUG), raw_msg_next);
             level = RETRO_LOG_DEBUG; 
             break;
         }
@@ -542,8 +542,8 @@ void rg_msg(uint8_t context, const char* format, ...) {
             break;
     }
 
-    struct retro_message_ext msg = {
-        .msg = msg_text,                         // текст сообщения
+    struct retro_message_ext out_msg = {
+        .msg = msg,                         // текст сообщения
         .duration = duration,                    // время отображения в мс
         .priority = priority,                    // приоритет очереди отображения
         .level = level,                          // уровень сообщения (иконка сообщения)
@@ -552,5 +552,5 @@ void rg_msg(uint8_t context, const char* format, ...) {
         .progress = progress                     // прогресс бар
     };
 
-    environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &msg);
+    environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, &out_msg);
 }

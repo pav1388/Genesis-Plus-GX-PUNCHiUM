@@ -11,7 +11,7 @@
 #define HERO_HEIGHT    48
 
 static const uint16_t pixel_art_hero[] = {
-	// 'Rex - Dinosaurs for Hire_Rex', 62x48px
+	// 'Rex - Dinosaurs for Hire_hero', 62x48px
 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0x0220, 0x0220, 0x0220, 0x4324, 0x1c41, 0x1c41, 0x0220, 0xffff, 0xffff, 0xffff,
 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
@@ -212,7 +212,7 @@ static const uint16_t pixel_art_dot[] = {
 };
 
 #define ENEMY_WIDTH     27
-#define PIXEL_ART_ENEMY_HEIGHT    36
+#define ENEMY_HEIGHT    36
 
 static const uint16_t pixel_art_enemy[] = {
 	// 'Rex - Dinosaurs for Hire_enemy', 27x36px
@@ -362,10 +362,10 @@ static void draw_overlay_progress_bar(uint16_t* pause_frame,
     if (rg_main.glitch_count > 2) {
         // PIXEL_ART_ENEMY
         enemy_x = 10;
-        enemy_y = screen_height - PIXEL_ART_ENEMY_HEIGHT - 20;
+        enemy_y = screen_height - ENEMY_HEIGHT - 20;
         draw_sprite(pause_frame, dst_pitch, screen_width, screen_height,
             pixel_art_enemy,
-            ENEMY_WIDTH, PIXEL_ART_ENEMY_HEIGHT,
+            ENEMY_WIDTH, ENEMY_HEIGHT,
             enemy_x, enemy_y);
     }
     else {

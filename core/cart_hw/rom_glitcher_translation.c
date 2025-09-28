@@ -63,7 +63,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG ERROR: %s.",
             [RG_TR_RG_FOUND] = "RG FOUND: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG PLAYBACK: 'Menu' to stop. Step %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG PLAYBACK: 'Menu' to stop. Step %u [%s]",
             [RG_TR_RG_RECORD] = "RG RECORD: 'Menu' to finish.",
             [RG_TR_RG_DEBUG] = "RG DEBUG: %s.",
             [RG_TR_B] = "B", // bug
@@ -117,7 +117,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG ОШИБКА: %s.",
             [RG_TR_RG_FOUND] = "RG НАЙДЕНО: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG ВОСПРОИЗВЕДЕНИЕ: 'Меню' для остановки. Шаг %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG ВОСПРОИЗВЕДЕНИЕ: 'Меню' для остановки. Шаг %u [%s]",
             [RG_TR_RG_RECORD] = "RG ЗАПИСЬ: 'Меню' для завершения.",
             [RG_TR_RG_DEBUG] = "RG ОТЛАДКА: %s.",
             [RG_TR_B] = "Б", // баг
@@ -171,7 +171,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG ERROR: %s.",
             [RG_TR_RG_FOUND] = "RG ENCONTRADO: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG REPRODUCIENDO: 'Menú' para parar. Paso %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG REPRODUCIENDO: 'Menú' para parar. Paso %u [%s]",
             [RG_TR_RG_RECORD] = "RG GRABANDO: 'Menú' para finalizar.",
             [RG_TR_RG_DEBUG] = "RG DEPURACIÓN: %s.",
             [RG_TR_B] = "E", // error (bug)
@@ -225,7 +225,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG ERRO: %s.",
             [RG_TR_RG_FOUND] = "RG ENCONTRADO: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG REPRODUZINDO: 'Menu' para parar. Passo %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG REPRODUZINDO: 'Menu' para parar. Passo %u [%s]",
             [RG_TR_RG_RECORD] = "RG GRAVANDO: 'Menu' para finalizar.",
             [RG_TR_RG_DEBUG] = "RG DEPURAÇÃO: %s.",
             [RG_TR_B] = "B", // bug
@@ -279,7 +279,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG FEHLER: %s.",
             [RG_TR_RG_FOUND] = "RG GEFUNDEN: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG WIEDERGABE: 'Menü' zum Stoppen. Schritt %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG WIEDERGABE: 'Menü' zum Stoppen. Schritt %u [%s]",
             [RG_TR_RG_RECORD] = "RG AUFNAHME: 'Menü' zum Beenden.",
             [RG_TR_RG_DEBUG] = "RG DEBUG: %s.",
             [RG_TR_B] = "F", // Fehler
@@ -333,7 +333,7 @@ static struct {
             [RG_TR_RG_INFO] = "RG: %s.",
             [RG_TR_RG_ERROR] = "RG ERRORE: %s.",
             [RG_TR_RG_FOUND] = "RG TROVATO: %s.",
-            [RG_TR_RG_PLAYBACK] = "RG RIPRODUZIONE: 'Menu' per fermare. Passo %d [%s]",
+            [RG_TR_RG_PLAYBACK] = "RG RIPRODUZIONE: 'Menu' per fermare. Passo %u [%s]",
             [RG_TR_RG_RECORD] = "RG REGISTRAZIONE: 'Menu' per finire.",
             [RG_TR_RG_DEBUG] = "RG DEBUG: %s.",
             [RG_TR_B] = "B", // bug
