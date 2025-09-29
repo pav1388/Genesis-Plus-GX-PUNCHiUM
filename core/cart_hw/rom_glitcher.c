@@ -3,45 +3,7 @@
 // ROM Glitcher: Instruction Inverter
 // 
 // perfect_genius - glitcher idea, pav13 - implementation
-// https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
-
-// Битовая маска фильтра инструкций rg_inst_allowed:
-// -- Условные переходы (Bcc)
-#define INST_BHI_BLS    0   // Branch if Higher/Lower or Same
-#define INST_BCC_BCS    1   // Branch if Carry Clear/Carry Set
-#define INST_BNE_BEQ    2   // Branch if Not Equal/Equal
-#define INST_BVC_BVS    3   // Branch if Overflow Clear/Overflow Set
-#define INST_BPL_BMI    4   // Branch if Plus/Minus
-#define INST_BGE_BLT    5   // Branch if Greater or Equal/Less Than
-#define INST_BGT_BLE    6   // Branch if Greater Than/Less or Equal
-/* skip                 7 */
-// -- Установка условий (Scc)
-/* skip                 8 */
-#define INST_SHI_SLS    9   // Set if Higher/Lower or Same
-#define INST_SCC_SCS    10  // Set if Carry Clear/Carry Set
-#define INST_SNE_SEQ    11  // Set if Not Equal/Equal
-#define INST_SVC_SVS    12  // Set if Overflow Clear/Overflow Set
-#define INST_SPL_SMI    13  // Set if Plus/Minus
-#define INST_SGE_SLT    14  // Set if Greater or Equal/Less Than
-#define INST_SGT_SLE    15  // Set if Greater Than/Less or Equal
-// -- Циклы (DBcc)
-/* skip                 16 */
-#define INST_DBHI_DBLS  17  // Decrement and Branch if Higher/Lower or Same
-#define INST_DBCC_DBCS  18  // Decrement and Branch if Carry Clear/Carry Set
-#define INST_DBNE_DBEQ  19  // Decrement and Branch if Not Equal/Equal
-#define INST_DBVC_DBVS  20  // Decrement and Branch if Overflow Clear/Overflow Set
-#define INST_DBPL_DBMI  21  // Decrement and Branch if Plus/Minus
-#define INST_DBGE_DBLT  22  // Decrement and Branch if Greater or Equal/Less Than
-#define INST_DBGT_DBLE  23  // Decrement and Branch if Greater Than/Less or Equal
-// -- Арифметические
-#define INST_ADD_SUB    24  // ADD/SUB   (Addition/Subtraction)
-#define INST_ADDX_SUBX  25  // ADDX/SUBX (Addition/Subtraction with Expansion)
-#define INST_ADDA_SUBA  26  // ADDA/SUBA (Addition/Subtraction of Addresses)
-#define INST_ADDI_SUBI  27  // ADDI/SUBI (Addition/Subtraction of Immediate Values)
-#define INST_ADDQ_SUBQ  28  // ADDQ/SUBQ (Fast Addition/Subtraction)
-/* skip                 29 */
-/* skip                 30 */
-/* skip                 31 */
+// https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059 
 
 #define VIRT_TO_REAL true
 #define REAL_TO_VIRT false
@@ -1041,7 +1003,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
             if (target_addr < trim || (target_addr + 1) >= (int32_t)rom_size)
                 continue;
 
-            // Проверка данных по целевому адресу на легальность для M68K
+            // Проверка опкода по целевому адресу на валидность
             opcode = (rom_data[target_addr] << 8) | rom_data[target_addr + 1];
             next_checks = true;
         }
@@ -1392,9 +1354,8 @@ void rg_deinit(void) {
 // вычисление адреса смещения между реальным и виртуальным ROM
 static uint32_t address_offset_calculation(uint32_t address, bool direction) {
     uint32_t addr = address;
-
-    // VIRT_TO_REAL
-    if (direction) { 
+    
+    if (direction) { // VIRT_TO_REAL
         if (rg_rom_was_deinterleaved) {
             uint32_t block = address / 0x4000;
             uint32_t offset = address % 0x4000;
@@ -1414,8 +1375,7 @@ static uint32_t address_offset_calculation(uint32_t address, bool direction) {
         if (rg_rom_in_mdx)
             addr += 4;
     }
-    // REAL_TO_VIRT
-    else {
+    else { // REAL_TO_VIRT
         if (rg_rom_in_mdx)
             addr -= 4;
 

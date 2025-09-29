@@ -54,7 +54,6 @@ typedef enum {
     RG_TR_ERROR_BACKUP,
     RG_TR_ERROR_ADDRESS,
     RG_TR_ERROR_FILE_ACCESS,
-    RG_TR_EMPTY,
     RG_TR_COUNT
 } rom_glitcher_translation_t;
 

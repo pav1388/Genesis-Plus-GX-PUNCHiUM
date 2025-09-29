@@ -91,8 +91,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Allocating memory",
             [RG_TR_ERROR_BACKUP] = "No backup data",
             [RG_TR_ERROR_ADDRESS] = "Address not found. Try again",
-            [RG_TR_ERROR_FILE_ACCESS] = "File access denied",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "File access denied"
         }
     },
     {
@@ -145,8 +144,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Выделение памяти",
             [RG_TR_ERROR_BACKUP] = "Нет данных резервной копии",
             [RG_TR_ERROR_ADDRESS] = "Адрес не найден. Попробуйте ещё раз",
-            [RG_TR_ERROR_FILE_ACCESS] = "Доступ к файлу запрещен",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "Доступ к файлу запрещен"
         }
     },
     {
@@ -199,8 +197,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Asignando memoria",
             [RG_TR_ERROR_BACKUP] = "No hay datos de respaldo",
             [RG_TR_ERROR_ADDRESS] = "Dirección no encontrada. Intente de nuevo",
-            [RG_TR_ERROR_FILE_ACCESS] = "Acceso al archivo denegado",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "Acceso al archivo denegado"
         }
     },
     {
@@ -253,8 +250,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Alocando memória",
             [RG_TR_ERROR_BACKUP] = "Sem dados de backup",
             [RG_TR_ERROR_ADDRESS] = "Endereço não encontrado. Tente novamente",
-            [RG_TR_ERROR_FILE_ACCESS] = "Acesso ao arquivo negado",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "Acesso ao arquivo negado"
         }
     },
     {
@@ -307,8 +303,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Speicherzuweisung",
             [RG_TR_ERROR_BACKUP] = "Keine Backup-Daten",
             [RG_TR_ERROR_ADDRESS] = "Adresse nicht gefunden. Versuchen Sie es erneut",
-            [RG_TR_ERROR_FILE_ACCESS] = "Dateizugriff verweigert",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "Dateizugriff verweigert"
         }
     },
     {
@@ -361,8 +356,7 @@ static struct {
             [RG_TR_ERROR_MEMORY] = "Allocazione memoria",
             [RG_TR_ERROR_BACKUP] = "Nessun dato di backup",
             [RG_TR_ERROR_ADDRESS] = "Indirizzo non trovato. Riprova",
-            [RG_TR_ERROR_FILE_ACCESS] = "Accesso al file negato",
-            [RG_TR_EMPTY] = NULL
+            [RG_TR_ERROR_FILE_ACCESS] = "Accesso al file negato"
         }
     }
 };
