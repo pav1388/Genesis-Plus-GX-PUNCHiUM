@@ -4,11 +4,12 @@
 #define _ROM_GLITCHER_H_
 
 #define RG_DEBUG 0
-#define RG_VERSION_BASE "v0.3.2"
+#define RG_VERSION_BASE "v0.3.3"
 #define RG_DISABLED_KEY                 -2  // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
 #define RG_PATH_SIZE                    512
+#define RG_ROM_HEADER_SIZE              512
 #define RG_MAX_REPLAY_FRAMES            7200    // 60 FPS * 120 sec
 #define RG_MAX_REPLAY_GAMEPADS          2       // port 0 and 1
 
@@ -95,7 +96,7 @@ typedef struct {
     uint8_t count;
 } rom_glitcher_bug_glitches_t;
 
-extern const struct retro_game_info* rg_last_game; // info to reload current game
+extern const struct retro_game_info* rg_last_game;
 extern int32_t rg_menu_button;
 extern bool rg_swap_buttons;
 extern bool rg_menu_visible;
@@ -127,7 +128,7 @@ extern retro_environment_t environ_cb;
 
 void rg_init(uint8_t* rom_data, uint32_t size);
 void rg_deinit(void);
-void rg_force_stop_glitcher(void);
+void rg_force_stop(void);
 void rg_game_reset(void);
 void rg_game_save_state(void);
 void rg_game_load_state(void);

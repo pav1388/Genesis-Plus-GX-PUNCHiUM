@@ -957,7 +957,7 @@ static void apply_glitches(void) {
     // если заголовок не был удалён эмулятором
     if (!rg_rom_has_header) {
         // пересчёт контрольной суммы в заголовке
-        uint16_t real_checksum = get_rom_checksum(((uint8*)cart.rom) + 0x200, cart.romsize - 0x200);
+        uint16_t real_checksum = get_rom_checksum(((uint8*)cart.rom) + RG_ROM_HEADER_SIZE, cart.romsize - RG_ROM_HEADER_SIZE);
         cart.rom[0x18E] = (real_checksum >> 8) & 0xFF;
         cart.rom[0x18F] = real_checksum & 0xFF;
     }
@@ -967,7 +967,7 @@ static void apply_glitches(void) {
  
 // поиск инструкций в ROM
 static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t* prev_found_count) {
-    uint32_t trim = rg_rom_has_header ? 0 : 0x200;
+    int32_t trim = rg_rom_has_header ? 0 : RG_ROM_HEADER_SIZE;
     uint32_t capacity = 10000;
     rg_main.glitch_count = 0;
     rg_main.glitch = malloc(capacity * sizeof(rom_glitcher_glitch_t));
@@ -990,11 +990,18 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
                 continue;
 
             // Проверка целевого адреса на чётность и попадание в ROM
-            uint8_t offset8 = rom_data[byte_addr + 1];
+            int8_t offset8 = rom_data[byte_addr + 1];
             int32_t target_addr = 0;
 
-            if (offset8 != 0 && (offset8 & 1) == 0) {
-                // Короткое смещение
+            if (offset8 != 0) { // Короткое смещение
+                // Проверка короткого смещения на валидность
+#ifdef COMPRESSED_OPCODE_TABLE
+                if (!m68k_opcode_valid(opcode))
+                    continue;
+#else
+                if (!m68k_opcode_valid_table[opcode])
+                    continue;
+#endif // COMPRESSED_OPCODE_TABLE
 
                 // Проверка опкода после предпологаемой Bcc инструкции
                 if (byte_addr + 3 >= rom_size)
@@ -1008,13 +1015,9 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
                     continue;
 #endif // COMPRESSED_OPCODE_TABLE
 
-                target_addr = byte_addr + 2 + (int8_t)offset8;
+                target_addr = byte_addr + 2 + offset8;
             }
-            else {
-                // Длинное смещение
-                if (offset8 != 0)
-                    continue;
-
+            else { // Длинное смещение
                 // Проверка опкода после предпологаемой Bcc инструкции
                 if (byte_addr + 5 >= rom_size)
                     continue;
@@ -1027,15 +1030,15 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
                     continue;
 #endif // COMPRESSED_OPCODE_TABLE
 
-                uint16_t offset16 = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
+                int16_t offset16 = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
 
                 if ((offset16 & 1) != 0 || offset16 == 0)
                     continue;
 
-                target_addr = byte_addr + 2 + (int16_t)offset16;
+                target_addr = byte_addr + 2 + offset16;
             }
 
-            if (target_addr < (int32_t)trim || (target_addr + 1) >= (int32_t)rom_size)
+            if (target_addr < trim || (target_addr + 1) >= (int32_t)rom_size)
                 continue;
 
             // Проверка данных по целевому адресу на легальность для M68K
@@ -1047,7 +1050,6 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         else if ((rg_inst_allowed & 0x00FF0000) &&
             ((opcode & 0b1111000011111000) == 0b0101000011001000)) {
             // Проверка бита разрешения поиска конкретной пары DBcc инструкций
-            //if (!(rg_inst_allowed & (1 << ((high_byte - 0x50 + 16) >> 1))))
             if (!(rg_inst_allowed & (1 << (((opcode >> 8) & 0x0F) + 16))))
                 continue;
 
@@ -1058,7 +1060,6 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         else if ((rg_inst_allowed & 0x0000FF00) &&
             ((opcode & 0b1111000011000000) == 0b0101000011000000)) {
             // Проверка бита разрешения поиска конкретной пары Scc инструкций
-            //if (!(rg_inst_allowed & (1 << ((high_byte - 0x50 + 8) >> 1))))
             if (!(rg_inst_allowed & (1 << (((opcode >> 8) & 0x0F) + 8))))
                 continue;
 
@@ -1220,7 +1221,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
     // если заголовок не был удалён эмулятором
     if (!rg_rom_has_header) {
         uint16_t header_checksum = (cart.rom[0x18E] << 8) | cart.rom[0x18F];
-        uint16_t real_checksum = get_rom_checksum(((uint8*)cart.rom) + 0x200, cart.romsize - 0x200);
+        uint16_t real_checksum = get_rom_checksum(((uint8*)cart.rom) + RG_ROM_HEADER_SIZE, cart.romsize - RG_ROM_HEADER_SIZE);
         // обновление контрольной суммы в заголовке
         if (header_checksum != real_checksum) {
             cart.rom[0x18E] = (real_checksum >> 8) & 0xFF;
@@ -1326,7 +1327,7 @@ static void current_search_end(void) {
 }
 
 // принудительная остановка 
-void rg_force_stop_glitcher(void) { 
+void rg_force_stop(void) { 
     instructions_restore();
     rg_main.init_done = false;
     rg_game_reset();

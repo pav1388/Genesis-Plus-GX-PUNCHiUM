@@ -1,5 +1,5 @@
 # Genesis Plus GX with ROM Glitcher: Instruction Inverter
-(BHI/BLS, BCC/BCS, BNE/BEQ, BVC/BVS, BPL/BMI, BGE/BLT, BGT/BLE)
+(ADD/SUB, Bcc, Scc, DBcc)
 
 https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
 

@@ -48,7 +48,7 @@ static rom_glitcher_menu_item_t menu_launch[] = {
 static rom_glitcher_menu_item_t menu_search[] = {
     { get_label_search, NULL },                                 // BUG NOT_FOUND FOUND Step_back
     { get_label_list_of_found, menu_item_open_list_of_found },  // List of found
-    { get_label_stop_glitcher, rg_force_stop_glitcher },        // Stop Glitcher
+    { get_label_stop_glitcher, rg_force_stop },                 // Stop Glitcher
     { get_label_options, menu_item_open_options }               // Options
 };
 

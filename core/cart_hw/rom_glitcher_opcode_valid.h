@@ -15,7 +15,7 @@
 где каждый бит это опкод.
 */
 
-// edited for Sega MD (odd-byte branch opcodes removed)
+// edited for Sega MD (odd-byte branch opcodes removed, even offset branch opcodes 0x**FE removed)
 static uint8_t m68k_opcode_valid_table[8192];
 
 static void m68k_opcode_valid_init(void) {
@@ -40,6 +40,7 @@ static void m68k_opcode_valid_init(void) {
 		{0x0,0x0,0xFF,0x0,0x0,0xFF,0xFF,0xF,0x0,0x0,0xFF,0x0,0x0,0xFF,0xFF,0xF},
 		{0xFF,0x0,0xFF,0xFF,0xFF,0xFF,0xFF,0x3,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x3},
 		{0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55},
+		{0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x15},
 		{0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF},
 		{0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x3,0x0,0x0,0xFF,0xFF,0xFF,0xFF,0xFF,0x3},
 		{0x0,0x0,0xFF,0xFF,0xFF,0xFF,0xFF,0x3,0xFF,0x0,0xFF,0xFF,0xFF,0xFF,0xFF,0x1F},
@@ -63,27 +64,27 @@ static void m68k_opcode_valid_init(void) {
 		13,14,6,11,4,4,6,11,6,15,6,11,16,17,6,11,
 		18,3,18,3,18,3,18,3,18,3,18,3,18,3,18,3,
 		18,3,18,3,18,3,18,3,18,3,18,3,18,3,18,3,
-		19,19,19,19,19,19,19,19,19,19,19,19,19,19,19,19,
-		19,19,19,19,19,19,19,19,19,19,19,19,19,19,19,19,
-		20,20,6,6,20,20,6,6,20,20,6,6,20,20,6,6,
-		20,20,6,6,20,20,6,6,20,20,6,6,20,20,6,6,
-		8,8,21,22,8,8,21,22,8,8,21,22,8,8,21,22,
-		8,8,21,22,8,8,21,22,8,8,21,22,8,8,21,22,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
+		19,19,19,19,19,20,19,20,19,20,19,20,19,20,19,20,
+		19,20,19,20,19,20,19,20,19,20,19,20,19,20,19,20,
+		21,21,6,6,21,21,6,6,21,21,6,6,21,21,6,6,
+		21,21,6,6,21,21,6,6,21,21,6,6,21,21,6,6,
+		8,8,22,23,8,8,22,23,8,8,22,23,8,8,22,23,
+		8,8,22,23,8,8,22,23,8,8,22,23,8,8,22,23,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
 		6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
 		6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
-		8,8,3,25,8,8,3,25,8,8,3,25,8,8,3,25,
-		8,8,3,25,8,8,3,25,8,8,3,25,8,8,3,25,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
-		23,9,3,24,23,9,3,24,23,9,3,24,23,9,3,24,
-		20,26,20,26,20,26,20,26,20,26,20,26,20,26,20,26,
-		20,27,20,27,20,27,20,27,20,27,20,27,20,27,20,27,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
+		8,8,3,26,8,8,3,26,8,8,3,26,8,8,3,26,
+		8,8,3,26,8,8,3,26,8,8,3,26,8,8,3,26,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
+		24,9,3,25,24,9,3,25,24,9,3,25,24,9,3,25,
+		21,27,21,27,21,27,21,27,21,27,21,27,21,27,21,27,
+		21,28,21,28,21,28,21,28,21,28,21,28,21,28,21,28,
 		6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
 		6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6
-	}; 
+	};
 	
 	for (int i = 0; i < 512; i++) {
 		int offset = i * 16;
@@ -100,8 +101,8 @@ static bool m68k_opcode_valid(uint16_t opcode) {
 
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655231.html#msg1655231
 
-// edited for Sega MD (odd-byte branch opcodes removed)
-static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
+// edited for Sega MD (odd-byte branch opcodes removed, even offset branch opcodes 0x**FE removed)
+static const bool m68k_opcode_valid_table[65536] = {
 	true, true, true, true, true, true, true, true, 		// 0000, 0001, 0002, 0003, 0004, 0005, 0006, 0007,
 	false, false, false, false, false, false, false, false, // 0008, 0009, 000a, 000b, 000c, 000d, 000e, 000f,
 	true, true, true, true, true, true, true, true,         // 0010, 0011, 0012, 0013, 0014, 0015, 0016, 0017,
@@ -3269,7 +3270,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 62e0, 62e1, 62e2, 62e3, 62e4, 62e5, 62e6, 62e7,
 	true, false, true, false, true, false, true, false,     // 62e8, 62e9, 62ea, 62eb, 62ec, 62ed, 62ee, 62ef,
 	true, false, true, false, true, false, true, false,     // 62f0, 62f1, 62f2, 62f3, 62f4, 62f5, 62f6, 62f7,
-	true, false, true, false, true, false, true, false,     // 62f8, 62f9, 62fa, 62fb, 62fc, 62fd, 62fe, 62ff,
+	true, false, true, false, true, false, false, false,     // 62f8, 62f9, 62fa, 62fb, 62fc, 62fd, 62fe, 62ff,
 	true, false, true, false, true, false, true, false,     // 6300, 6301, 6302, 6303, 6304, 6305, 6306, 6307,
 	true, false, true, false, true, false, true, false,     // 6308, 6309, 630a, 630b, 630c, 630d, 630e, 630f,
 	true, false, true, false, true, false, true, false,     // 6310, 6311, 6312, 6313, 6314, 6315, 6316, 6317,
@@ -3301,7 +3302,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 63e0, 63e1, 63e2, 63e3, 63e4, 63e5, 63e6, 63e7,
 	true, false, true, false, true, false, true, false,     // 63e8, 63e9, 63ea, 63eb, 63ec, 63ed, 63ee, 63ef,
 	true, false, true, false, true, false, true, false,     // 63f0, 63f1, 63f2, 63f3, 63f4, 63f5, 63f6, 63f7,
-	true, false, true, false, true, false, true, false,     // 63f8, 63f9, 63fa, 63fb, 63fc, 63fd, 63fe, 63ff,
+	true, false, true, false, true, false, false, false,     // 63f8, 63f9, 63fa, 63fb, 63fc, 63fd, 63fe, 63ff,
 	true, false, true, false, true, false, true, false,     // 6400, 6401, 6402, 6403, 6404, 6405, 6406, 6407,
 	true, false, true, false, true, false, true, false,     // 6408, 6409, 640a, 640b, 640c, 640d, 640e, 640f,
 	true, false, true, false, true, false, true, false,     // 6410, 6411, 6412, 6413, 6414, 6415, 6416, 6417,
@@ -3333,7 +3334,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 64e0, 64e1, 64e2, 64e3, 64e4, 64e5, 64e6, 64e7,
 	true, false, true, false, true, false, true, false,     // 64e8, 64e9, 64ea, 64eb, 64ec, 64ed, 64ee, 64ef,
 	true, false, true, false, true, false, true, false,     // 64f0, 64f1, 64f2, 64f3, 64f4, 64f5, 64f6, 64f7,
-	true, false, true, false, true, false, true, false,     // 64f8, 64f9, 64fa, 64fb, 64fc, 64fd, 64fe, 64ff,
+	true, false, true, false, true, false, false, false,     // 64f8, 64f9, 64fa, 64fb, 64fc, 64fd, 64fe, 64ff,
 	true, false, true, false, true, false, true, false,     // 6500, 6501, 6502, 6503, 6504, 6505, 6506, 6507,
 	true, false, true, false, true, false, true, false,     // 6508, 6509, 650a, 650b, 650c, 650d, 650e, 650f,
 	true, false, true, false, true, false, true, false,     // 6510, 6511, 6512, 6513, 6514, 6515, 6516, 6517,
@@ -3365,7 +3366,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 65e0, 65e1, 65e2, 65e3, 65e4, 65e5, 65e6, 65e7,
 	true, false, true, false, true, false, true, false,     // 65e8, 65e9, 65ea, 65eb, 65ec, 65ed, 65ee, 65ef,
 	true, false, true, false, true, false, true, false,     // 65f0, 65f1, 65f2, 65f3, 65f4, 65f5, 65f6, 65f7,
-	true, false, true, false, true, false, true, false,     // 65f8, 65f9, 65fa, 65fb, 65fc, 65fd, 65fe, 65ff,
+	true, false, true, false, true, false, false, false,     // 65f8, 65f9, 65fa, 65fb, 65fc, 65fd, 65fe, 65ff,
 	true, false, true, false, true, false, true, false,     // 6600, 6601, 6602, 6603, 6604, 6605, 6606, 6607,
 	true, false, true, false, true, false, true, false,     // 6608, 6609, 660a, 660b, 660c, 660d, 660e, 660f,
 	true, false, true, false, true, false, true, false,     // 6610, 6611, 6612, 6613, 6614, 6615, 6616, 6617,
@@ -3397,7 +3398,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 66e0, 66e1, 66e2, 66e3, 66e4, 66e5, 66e6, 66e7,
 	true, false, true, false, true, false, true, false,     // 66e8, 66e9, 66ea, 66eb, 66ec, 66ed, 66ee, 66ef,
 	true, false, true, false, true, false, true, false,     // 66f0, 66f1, 66f2, 66f3, 66f4, 66f5, 66f6, 66f7,
-	true, false, true, false, true, false, true, false,     // 66f8, 66f9, 66fa, 66fb, 66fc, 66fd, 66fe, 66ff,
+	true, false, true, false, true, false, false, false,     // 66f8, 66f9, 66fa, 66fb, 66fc, 66fd, 66fe, 66ff,
 	true, false, true, false, true, false, true, false,     // 6700, 6701, 6702, 6703, 6704, 6705, 6706, 6707,
 	true, false, true, false, true, false, true, false,     // 6708, 6709, 670a, 670b, 670c, 670d, 670e, 670f,
 	true, false, true, false, true, false, true, false,     // 6710, 6711, 6712, 6713, 6714, 6715, 6716, 6717,
@@ -3429,7 +3430,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 67e0, 67e1, 67e2, 67e3, 67e4, 67e5, 67e6, 67e7,
 	true, false, true, false, true, false, true, false,     // 67e8, 67e9, 67ea, 67eb, 67ec, 67ed, 67ee, 67ef,
 	true, false, true, false, true, false, true, false,     // 67f0, 67f1, 67f2, 67f3, 67f4, 67f5, 67f6, 67f7,
-	true, false, true, false, true, false, true, false,     // 67f8, 67f9, 67fa, 67fb, 67fc, 67fd, 67fe, 67ff,
+	true, false, true, false, true, false, false, false,     // 67f8, 67f9, 67fa, 67fb, 67fc, 67fd, 67fe, 67ff,
 	true, false, true, false, true, false, true, false,     // 6800, 6801, 6802, 6803, 6804, 6805, 6806, 6807,
 	true, false, true, false, true, false, true, false,     // 6808, 6809, 680a, 680b, 680c, 680d, 680e, 680f,
 	true, false, true, false, true, false, true, false,     // 6810, 6811, 6812, 6813, 6814, 6815, 6816, 6817,
@@ -3461,7 +3462,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 68e0, 68e1, 68e2, 68e3, 68e4, 68e5, 68e6, 68e7,
 	true, false, true, false, true, false, true, false,     // 68e8, 68e9, 68ea, 68eb, 68ec, 68ed, 68ee, 68ef,
 	true, false, true, false, true, false, true, false,     // 68f0, 68f1, 68f2, 68f3, 68f4, 68f5, 68f6, 68f7,
-	true, false, true, false, true, false, true, false,     // 68f8, 68f9, 68fa, 68fb, 68fc, 68fd, 68fe, 68ff,
+	true, false, true, false, true, false, false, false,     // 68f8, 68f9, 68fa, 68fb, 68fc, 68fd, 68fe, 68ff,
 	true, false, true, false, true, false, true, false,     // 6900, 6901, 6902, 6903, 6904, 6905, 6906, 6907,
 	true, false, true, false, true, false, true, false,     // 6908, 6909, 690a, 690b, 690c, 690d, 690e, 690f,
 	true, false, true, false, true, false, true, false,     // 6910, 6911, 6912, 6913, 6914, 6915, 6916, 6917,
@@ -3493,7 +3494,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 69e0, 69e1, 69e2, 69e3, 69e4, 69e5, 69e6, 69e7,
 	true, false, true, false, true, false, true, false,     // 69e8, 69e9, 69ea, 69eb, 69ec, 69ed, 69ee, 69ef,
 	true, false, true, false, true, false, true, false,     // 69f0, 69f1, 69f2, 69f3, 69f4, 69f5, 69f6, 69f7,
-	true, false, true, false, true, false, true, false,     // 69f8, 69f9, 69fa, 69fb, 69fc, 69fd, 69fe, 69ff,
+	true, false, true, false, true, false, false, false,     // 69f8, 69f9, 69fa, 69fb, 69fc, 69fd, 69fe, 69ff,
 	true, false, true, false, true, false, true, false,     // 6a00, 6a01, 6a02, 6a03, 6a04, 6a05, 6a06, 6a07,
 	true, false, true, false, true, false, true, false,     // 6a08, 6a09, 6a0a, 6a0b, 6a0c, 6a0d, 6a0e, 6a0f,
 	true, false, true, false, true, false, true, false,     // 6a10, 6a11, 6a12, 6a13, 6a14, 6a15, 6a16, 6a17,
@@ -3525,7 +3526,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6ae0, 6ae1, 6ae2, 6ae3, 6ae4, 6ae5, 6ae6, 6ae7,
 	true, false, true, false, true, false, true, false,     // 6ae8, 6ae9, 6aea, 6aeb, 6aec, 6aed, 6aee, 6aef,
 	true, false, true, false, true, false, true, false,     // 6af0, 6af1, 6af2, 6af3, 6af4, 6af5, 6af6, 6af7,
-	true, false, true, false, true, false, true, false,     // 6af8, 6af9, 6afa, 6afb, 6afc, 6afd, 6afe, 6aff,
+	true, false, true, false, true, false, false, false,     // 6af8, 6af9, 6afa, 6afb, 6afc, 6afd, 6afe, 6aff,
 	true, false, true, false, true, false, true, false,     // 6b00, 6b01, 6b02, 6b03, 6b04, 6b05, 6b06, 6b07,
 	true, false, true, false, true, false, true, false,     // 6b08, 6b09, 6b0a, 6b0b, 6b0c, 6b0d, 6b0e, 6b0f,
 	true, false, true, false, true, false, true, false,     // 6b10, 6b11, 6b12, 6b13, 6b14, 6b15, 6b16, 6b17,
@@ -3557,7 +3558,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6be0, 6be1, 6be2, 6be3, 6be4, 6be5, 6be6, 6be7,
 	true, false, true, false, true, false, true, false,     // 6be8, 6be9, 6bea, 6beb, 6bec, 6bed, 6bee, 6bef,
 	true, false, true, false, true, false, true, false,     // 6bf0, 6bf1, 6bf2, 6bf3, 6bf4, 6bf5, 6bf6, 6bf7,
-	true, false, true, false, true, false, true, false,     // 6bf8, 6bf9, 6bfa, 6bfb, 6bfc, 6bfd, 6bfe, 6bff,
+	true, false, true, false, true, false, false, false,     // 6bf8, 6bf9, 6bfa, 6bfb, 6bfc, 6bfd, 6bfe, 6bff,
 	true, false, true, false, true, false, true, false,     // 6c00, 6c01, 6c02, 6c03, 6c04, 6c05, 6c06, 6c07,
 	true, false, true, false, true, false, true, false,     // 6c08, 6c09, 6c0a, 6c0b, 6c0c, 6c0d, 6c0e, 6c0f,
 	true, false, true, false, true, false, true, false,     // 6c10, 6c11, 6c12, 6c13, 6c14, 6c15, 6c16, 6c17,
@@ -3589,7 +3590,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6ce0, 6ce1, 6ce2, 6ce3, 6ce4, 6ce5, 6ce6, 6ce7,
 	true, false, true, false, true, false, true, false,     // 6ce8, 6ce9, 6cea, 6ceb, 6cec, 6ced, 6cee, 6cef,
 	true, false, true, false, true, false, true, false,     // 6cf0, 6cf1, 6cf2, 6cf3, 6cf4, 6cf5, 6cf6, 6cf7,
-	true, false, true, false, true, false, true, false,     // 6cf8, 6cf9, 6cfa, 6cfb, 6cfc, 6cfd, 6cfe, 6cff,
+	true, false, true, false, true, false, false, false,     // 6cf8, 6cf9, 6cfa, 6cfb, 6cfc, 6cfd, 6cfe, 6cff,
 	true, false, true, false, true, false, true, false,     // 6d00, 6d01, 6d02, 6d03, 6d04, 6d05, 6d06, 6d07,
 	true, false, true, false, true, false, true, false,     // 6d08, 6d09, 6d0a, 6d0b, 6d0c, 6d0d, 6d0e, 6d0f,
 	true, false, true, false, true, false, true, false,     // 6d10, 6d11, 6d12, 6d13, 6d14, 6d15, 6d16, 6d17,
@@ -3621,7 +3622,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6de0, 6de1, 6de2, 6de3, 6de4, 6de5, 6de6, 6de7,
 	true, false, true, false, true, false, true, false,     // 6de8, 6de9, 6dea, 6deb, 6dec, 6ded, 6dee, 6def,
 	true, false, true, false, true, false, true, false,     // 6df0, 6df1, 6df2, 6df3, 6df4, 6df5, 6df6, 6df7,
-	true, false, true, false, true, false, true, false,     // 6df8, 6df9, 6dfa, 6dfb, 6dfc, 6dfd, 6dfe, 6dff,
+	true, false, true, false, true, false, false, false,     // 6df8, 6df9, 6dfa, 6dfb, 6dfc, 6dfd, 6dfe, 6dff,
 	true, false, true, false, true, false, true, false,     // 6e00, 6e01, 6e02, 6e03, 6e04, 6e05, 6e06, 6e07,
 	true, false, true, false, true, false, true, false,     // 6e08, 6e09, 6e0a, 6e0b, 6e0c, 6e0d, 6e0e, 6e0f,
 	true, false, true, false, true, false, true, false,     // 6e10, 6e11, 6e12, 6e13, 6e14, 6e15, 6e16, 6e17,
@@ -3653,7 +3654,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6ee0, 6ee1, 6ee2, 6ee3, 6ee4, 6ee5, 6ee6, 6ee7,
 	true, false, true, false, true, false, true, false,     // 6ee8, 6ee9, 6eea, 6eeb, 6eec, 6eed, 6eee, 6eef,
 	true, false, true, false, true, false, true, false,     // 6ef0, 6ef1, 6ef2, 6ef3, 6ef4, 6ef5, 6ef6, 6ef7,
-	true, false, true, false, true, false, true, false,     // 6ef8, 6ef9, 6efa, 6efb, 6efc, 6efd, 6efe, 6eff,
+	true, false, true, false, true, false, false, false,     // 6ef8, 6ef9, 6efa, 6efb, 6efc, 6efd, 6efe, 6eff,
 	true, false, true, false, true, false, true, false,     // 6f00, 6f01, 6f02, 6f03, 6f04, 6f05, 6f06, 6f07,
 	true, false, true, false, true, false, true, false,     // 6f08, 6f09, 6f0a, 6f0b, 6f0c, 6f0d, 6f0e, 6f0f,
 	true, false, true, false, true, false, true, false,     // 6f10, 6f11, 6f12, 6f13, 6f14, 6f15, 6f16, 6f17,
@@ -3685,7 +3686,7 @@ static const bool m68k_opcode_valid_table[65536] = {		// opcodes:
 	true, false, true, false, true, false, true, false,     // 6fe0, 6fe1, 6fe2, 6fe3, 6fe4, 6fe5, 6fe6, 6fe7,
 	true, false, true, false, true, false, true, false,     // 6fe8, 6fe9, 6fea, 6feb, 6fec, 6fed, 6fee, 6fef,
 	true, false, true, false, true, false, true, false,     // 6ff0, 6ff1, 6ff2, 6ff3, 6ff4, 6ff5, 6ff6, 6ff7,
-	true, false, true, false, true, false, true, false,     // 6ff8, 6ff9, 6ffa, 6ffb, 6ffc, 6ffd, 6ffe, 6fff,
+	true, false, true, false, true, false, false, false,     // 6ff8, 6ff9, 6ffa, 6ffb, 6ffc, 6ffd, 6ffe, 6fff,
 	true, true, true, true, true, true, true, true,         // 7000, 7001, 7002, 7003, 7004, 7005, 7006, 7007,
 	true, true, true, true, true, true, true, true,         // 7008, 7009, 700a, 700b, 700c, 700d, 700e, 700f,
 	true, true, true, true, true, true, true, true,         // 7010, 7011, 7012, 7013, 7014, 7015, 7016, 7017,
