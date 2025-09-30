@@ -3,7 +3,7 @@
 // ROM Glitcher: Instruction Inverter
 // 
 // perfect_genius - glitcher idea, pav13 - implementation
-// https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059 
+// https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
 
 #define VIRT_TO_REAL true
 #define REAL_TO_VIRT false
@@ -994,7 +994,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
 
                 int16_t offset16 = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
 
-                if ((offset16 & 1) != 0 || offset16 == 0)
+                if (offset16 % 2 || offset16 == 0 || offset16 == -2)
                     continue;
 
                 target_addr = byte_addr + 2 + offset16;
