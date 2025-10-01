@@ -2160,40 +2160,41 @@ void render_bg_m5_vs_enhanced(int line)
 
 void render_bg_m5_im2(int line)
 {
-  int column, start, end, a, w;
+  int column;
   uint32 atex, atbuf, *src, *dst;
-  uint32 shift, index, v_line, *nt;
 
   /* Common data */
+  int odd = odd_frame;
   uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
   uint32 yscroll      = *(uint32 *)&vsram[0];
   uint32 pf_col_mask  = playfield_col_mask;
-  uint32 pf_row_mask  = (playfield_row_mask << 1) | 1;
+  uint32 pf_row_mask  = playfield_row_mask;
   uint32 pf_shift     = playfield_shift;
 
-  /* Adjust line offset */
-  line = (line << 1) + odd_frame;
+  /* Window & Plane A */
+  int a = (reg[18] & 0x1F) << 3;
+  int w = (reg[18] >> 7) & 1;
 
   /* Plane B width */
-  start = 0;
-  end = bitmap.viewport.w >> 4;
+  int start = 0;
+  int end = bitmap.viewport.w >> 4;
 
   /* Plane B scroll */
 #ifdef LSB_FIRST
-  shift  = (xscroll >> 16) & 0x0F;
-  index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
-  v_line = (line + (yscroll >> 16)) & pf_row_mask;
+  uint32 shift  = (xscroll >> 16) & 0x0F;
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
+  uint32 v_line = (line + (yscroll >> 17)) & pf_row_mask;
 #else
-  shift  = (xscroll & 0x0F);
-  index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
-  v_line = (line + yscroll) & pf_row_mask;
+  uint32 shift  = (xscroll & 0x0F);
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
+  uint32 v_line = (line + (yscroll >> 1)) & pf_row_mask;
 #endif
 
   /* Plane B name table */
-  nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+  uint32 *nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
   /* Pattern row index */
-  v_line = (v_line & 15) << 3;
+  v_line = (((v_line & 7) << 1) | odd) << 3;
 
   if(shift)
   {
@@ -2214,10 +2215,6 @@ void render_bg_m5_im2(int line)
     atbuf = nt[index & pf_col_mask];
     DRAW_COLUMN_IM2(atbuf, v_line)
   }
-
-  /* Window & Plane A */
-  a = (reg[18] & 0x1F) << 4;
-  w = (reg[18] >> 7) & 1;
 
   if (w == (line >= a))
   {
@@ -2243,18 +2240,18 @@ void render_bg_m5_im2(int line)
 #ifdef LSB_FIRST
     shift   = (xscroll & 0x0F);
     index   = pf_col_mask + start + 1 - ((xscroll >> 4) & pf_col_mask);
-    v_line  = (line + yscroll) & pf_row_mask;
+    v_line  = (line + (yscroll >> 1)) & pf_row_mask;
 #else
     shift   = (xscroll >> 16) & 0x0F;
     index   = pf_col_mask + start + 1 - ((xscroll >> 20) & pf_col_mask);
-    v_line  = (line + (yscroll >> 16)) & pf_row_mask;
+    v_line  = (line + (yscroll >> 17)) & pf_row_mask;
 #endif
 
     /* Plane A name table */
-    nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     if(shift)
     {
@@ -2294,10 +2291,10 @@ void render_bg_m5_im2(int line)
   if (w)
   {
     /* Window name table */
-    nt = (uint32 *)&vram[ntwb | ((line >> 4) << (6 + (reg[12] & 1)))];
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
 
     /* Pattern row index */
-    v_line = (line & 15) << 3;
+    v_line = ((line & 7) << 1 | odd) << 3;
 
     /* Plane A line buffer */
     dst = (uint32 *)&linebuf[1][0x20 + (start << 4)];
@@ -2315,32 +2312,34 @@ void render_bg_m5_im2(int line)
 
 void render_bg_m5_im2_vs(int line)
 {
-  int column, start, end, a, w;
+  int column;
   uint32 atex, atbuf, *src, *dst;
-  uint32 shift, index, v_line, *nt;
+  uint32 v_line, *nt;
 
   /* Common data */
+  int odd = odd_frame;
   uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
   uint32 yscroll      = 0;
   uint32 pf_col_mask  = playfield_col_mask;
-  uint32 pf_row_mask  = (playfield_row_mask << 1) | 1;
+  uint32 pf_row_mask  = playfield_row_mask;
   uint32 pf_shift     = playfield_shift;
   uint32 *vs          = (uint32 *)&vsram[0];
 
-  /* Adjust line offset */
-  line = (line << 1) + odd_frame;
+  /* Window & Plane A */
+  int a = (reg[18] & 0x1F) << 3;
+  int w = (reg[18] >> 7) & 1;
 
   /* Plane B width */
-  start = 0;
-  end = bitmap.viewport.w >> 4;
+  int start = 0;
+  int end = bitmap.viewport.w >> 4;
 
   /* Plane B horizontal scroll */
 #ifdef LSB_FIRST
-  shift = (xscroll >> 16) & 0x0F;
-  index = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
+  uint32 shift  = (xscroll >> 16) & 0x0F;
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
 #else
-  shift = (xscroll & 0x0F);
-  index = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
+  uint32 shift  = (xscroll & 0x0F);
+  uint32 index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
 #endif
 
   /* Left-most column vertical scrolling when partially shown horizontally (verified on PAL MD2)  */
@@ -2349,7 +2348,7 @@ void render_bg_m5_im2_vs(int line)
   /* See Formula One / Kawasaki Superbike Challenge (H32) & Gynoug / Cutie Suzuki no Ringside Angel (H40) */
   if (reg[12] & 1)
   {
-    yscroll = vs[19] & (vs[19] >> 16);
+    yscroll = (vs[19] >> 1) & (vs[19] >> 17);
   }
 
   if(shift)
@@ -2358,10 +2357,10 @@ void render_bg_m5_im2_vs(int line)
     v_line = (line + yscroll) & pf_row_mask;
 
     /* Plane B name table */
-    nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     /* Plane B line buffer */
     dst = (uint32 *)&linebuf[0][0x10 + shift];
@@ -2379,24 +2378,20 @@ void render_bg_m5_im2_vs(int line)
   {
     /* Plane B vertical scroll */
 #ifdef LSB_FIRST
-    v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+    v_line = (line + (vs[column] >> 17)) & pf_row_mask;
 #else
-    v_line = (line + vs[column]) & pf_row_mask;
+    v_line = (line + (vs[column] >> 1)) & pf_row_mask;
 #endif
 
     /* Plane B name table */
-    nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     atbuf = nt[index & pf_col_mask];
     DRAW_COLUMN_IM2(atbuf, v_line)
   }
-
-  /* Window & Plane A */
-  a = (reg[18] & 0x1F) << 4;
-  w = (reg[18] >> 7) & 1;
 
   if (w == (line >= a))
   {
@@ -2433,10 +2428,10 @@ void render_bg_m5_im2_vs(int line)
       v_line = (line + yscroll) & pf_row_mask;
 
       /* Plane A name table */
-      nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       /* Plane A line buffer */
       dst = (uint32 *)&linebuf[1][0x10 + shift + (start << 4)];
@@ -2463,16 +2458,16 @@ void render_bg_m5_im2_vs(int line)
     {
       /* Plane A vertical scroll */
 #ifdef LSB_FIRST
-      v_line = (line + vs[column]) & pf_row_mask;
+      v_line = (line + (vs[column] >> 1)) & pf_row_mask;
 #else
-      v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+      v_line = (line + (vs[column] >> 17)) & pf_row_mask;
 #endif
 
       /* Plane A name table */
-      nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       atbuf = nt[index & pf_col_mask];
       DRAW_COLUMN_IM2(atbuf, v_line)
@@ -2487,10 +2482,10 @@ void render_bg_m5_im2_vs(int line)
   if (w)
   {
     /* Window name table */
-    nt = (uint32 *)&vram[ntwb | ((line >> 4) << (6 + (reg[12] & 1)))];
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
 
     /* Pattern row index */
-    v_line = (line & 15) << 3;
+    v_line = ((line & 7) << 1 | odd) << 3;
 
     /* Plane A line buffer */
     dst = (uint32 *)&linebuf[1][0x20 + (start << 4)];
@@ -2706,10 +2701,9 @@ void render_bg_m5_vs(int line)
     w = clip[1].enable;
   }
 
-  /* Left-most column vertical scrolling when partially shown horizontally (verified on PAL MD2)  */
-  /* TODO: check on Genesis 3 models since it apparently behaves differently  */
-  /* In H32 mode, vertical scrolling is disabled, in H40 mode, same value is used for both planes */
-  /* See Formula One / Kawasaki Superbike Challenge (H32) & Gynoug / Cutie Suzuki no Ringside Angel (H40) */
+  /* Left-most column vertical scrolling when partially shown horizontally */
+  /* Same value for both planes, only in 40-cell mode, verified on PAL MD2 */
+  /* See Gynoug, Cutie Suzuki no Ringside Angel, Formula One, Kawasaki Superbike Challenge */
   if (reg[12] & 1)
   {
     yscroll = vs[19] & (vs[19] >> 16);
@@ -2904,10 +2898,9 @@ void render_bg_m5_vs_enhanced(int line)
     w = clip[1].enable;
   }
 
-  /* Left-most column vertical scrolling when partially shown horizontally (verified on PAL MD2)  */
-  /* TODO: check on Genesis 3 models since it apparently behaves differently  */
-  /* In H32 mode, vertical scrolling is disabled, in H40 mode, same value is used for both planes */
-  /* See Formula One / Kawasaki Superbike Challenge (H32) & Gynoug / Cutie Suzuki no Ringside Angel (H40) */
+  /* Left-most column vertical scrolling when partially shown horizontally */
+  /* Same value for both planes, only in 40-cell mode, verified on PAL MD2 */
+  /* See Gynoug, Cutie Suzuki no Ringside Angel, Formula One, Kawasaki Superbike Challenge */
   if (reg[12] & 1)
   {
     yscroll = vs[19] & (vs[19] >> 16);
@@ -3202,16 +3195,17 @@ void render_bg_m5_vs_enhanced(int line)
 
 void render_bg_m5_im2(int line)
 {
-  int column, start, end, a, w;
+  int column, start, end;
   uint32 atex, atbuf, *src, *dst;
   uint32 shift, index, v_line, *nt;
   uint8 *lb;
 
   /* Scroll Planes common data */
+  int odd = odd_frame;
   uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
   uint32 yscroll      = *(uint32 *)&vsram[0];
   uint32 pf_col_mask  = playfield_col_mask;
-  uint32 pf_row_mask  = (playfield_row_mask << 1) | 1;
+  uint32 pf_row_mask  = playfield_row_mask;
   uint32 pf_shift     = playfield_shift;
 
   /* Number of columns to draw */
@@ -3220,14 +3214,11 @@ void render_bg_m5_im2(int line)
   /* Layer priority table */
   uint8 *table = lut[(reg[12] & 8) >> 2];
 
-  /* Adjust line offset */
-  line = (line << 1) + odd_frame;
-
   /* Window vertical range (cell 0-31) */
-  a = (reg[18] & 0x1F) << 4;
+  int a = (reg[18] & 0x1F) << 3;
 
   /* Window position (0=top, 1=bottom) */
-  w = (reg[18] >> 7) & 1;
+  int w = (reg[18] >> 7) & 1;
 
   /* Test against current line */
   if (w == (line >= a))
@@ -3254,21 +3245,21 @@ void render_bg_m5_im2(int line)
 #ifdef LSB_FIRST
     shift  = (xscroll & 0x0F);
     index  = pf_col_mask + start + 1 - ((xscroll >> 4) & pf_col_mask);
-    v_line = (line + yscroll) & pf_row_mask;
+    v_line = (line + (yscroll >> 1)) & pf_row_mask;
 #else
     shift  = (xscroll >> 16) & 0x0F;
     index  = pf_col_mask + start + 1 - ((xscroll >> 20) & pf_col_mask);
-    v_line = (line + (yscroll >> 16)) & pf_row_mask;
+    v_line = (line + (yscroll >> 17)) & pf_row_mask;
 #endif
 
     /* Background line buffer */
     dst = (uint32 *)&linebuf[0][0x20 + (start << 4) + shift];
 
     /* Plane A name table */
-    nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     if(shift)
     {
@@ -3312,10 +3303,10 @@ void render_bg_m5_im2(int line)
     dst = (uint32 *)&linebuf[0][0x20 + (start << 4)];
 
     /* Window name table */
-    nt = (uint32 *)&vram[ntwb | ((line >> 4) << (6 + (reg[12] & 1)))];
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
 
     /* Pattern row index */
-    v_line = (line & 15) << 3;
+    v_line = ((line & 7) << 1 | odd) << 3;
 
     for(column = start; column < end; column++)
     {
@@ -3328,18 +3319,18 @@ void render_bg_m5_im2(int line)
 #ifdef LSB_FIRST
   shift  = (xscroll >> 16) & 0x0F;
   index  = pf_col_mask + 1 - ((xscroll >> 20) & pf_col_mask);
-  v_line = (line + (yscroll >> 16)) & pf_row_mask;
+  v_line = (line + (yscroll >> 17)) & pf_row_mask;
 #else
   shift  = (xscroll & 0x0F);
   index  = pf_col_mask + 1 - ((xscroll >> 4) & pf_col_mask);
-  v_line = (line + yscroll) & pf_row_mask;
+  v_line = (line + (yscroll >> 1)) & pf_row_mask;
 #endif
 
   /* Plane B name table */
-  nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+  nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
   /* Pattern row index */
-  v_line = (v_line & 15) << 3;
+  v_line = (((v_line & 7) << 1) | odd) << 3;
 
   /* Background line buffer */
   lb = &linebuf[0][0x20];
@@ -3362,16 +3353,17 @@ void render_bg_m5_im2(int line)
 
 void render_bg_m5_im2_vs(int line)
 {
-  int column, start, end, a, w;
+  int column, start, end;
   uint32 atex, atbuf, *src, *dst;
   uint32 shift, index, v_line, *nt;
   uint8 *lb;
 
   /* common data */
+  int odd = odd_frame;
   uint32 xscroll      = *(uint32 *)&vram[hscb + ((line & hscroll_mask) << 2)];
   uint32 yscroll      = 0;
   uint32 pf_col_mask  = playfield_col_mask;
-  uint32 pf_row_mask  = (playfield_row_mask << 1) | 1;
+  uint32 pf_row_mask  = playfield_row_mask;
   uint32 pf_shift     = playfield_shift;
   uint32 *vs          = (uint32 *)&vsram[0];
 
@@ -3381,14 +3373,11 @@ void render_bg_m5_im2_vs(int line)
   /* Layer priority table */
   uint8 *table = lut[(reg[12] & 8) >> 2];
 
-  /* Adjust line offset */
-  line = (line << 1) + odd_frame;
-
   /* Window vertical range (cell 0-31) */
-  a = (reg[18] & 0x1F) << 4;
+  uint32 a = (reg[18] & 0x1F) << 3;
 
   /* Window position (0=top, 1=bottom) */
-  w = (reg[18] >> 7) & 1;
+  uint32 w = (reg[18] >> 7) & 1;
 
   /* Test against current line */
   if (w == (line >= a))
@@ -3404,13 +3393,13 @@ void render_bg_m5_im2_vs(int line)
     w = clip[1].enable;
   }
 
-  /* Left-most column vertical scrolling when partially shown horizontally (verified on PAL MD2)  */
-  /* TODO: check on Genesis 3 models since it apparently behaves differently  */
-  /* In H32 mode, vertical scrolling is disabled, in H40 mode, same value is used for both planes */
-  /* See Formula One / Kawasaki Superbike Challenge (H32) & Gynoug / Cutie Suzuki no Ringside Angel (H40) */
+  /* Left-most column vertical scrolling when partially shown horizontally */
+  /* Same value for both planes, only in 40-cell mode, verified on PAL MD2 */
+  /* See Gynoug, Cutie Suzuki no Ringside Angel, Formula One, Kawasaki Superbike Challenge */
   if (reg[12] & 1)
   {
-    yscroll = vs[19] & (vs[19] >> 16);
+    /* only in 40-cell mode, verified on MD2 */
+    yscroll = (vs[19] >> 1) & (vs[19] >> 17);
   }
 
   /* Plane A */
@@ -3441,10 +3430,10 @@ void render_bg_m5_im2_vs(int line)
       v_line = (line + yscroll) & pf_row_mask;
 
       /* Plane A name table */
-      nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       /* Window bug */
       if (start)
@@ -3463,16 +3452,16 @@ void render_bg_m5_im2_vs(int line)
     {
       /* Plane A vertical scroll */
 #ifdef LSB_FIRST
-      v_line = (line + vs[column]) & pf_row_mask;
+      v_line = (line + (vs[column] >> 1)) & pf_row_mask;
 #else
-      v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+      v_line = (line + (vs[column] >> 17)) & pf_row_mask;
 #endif
 
       /* Plane A name table */
-      nt = (uint32 *)&vram[ntab + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+      nt = (uint32 *)&vram[ntab + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       atbuf = nt[index & pf_col_mask];
       DRAW_COLUMN_IM2(atbuf, v_line)
@@ -3496,10 +3485,10 @@ void render_bg_m5_im2_vs(int line)
     dst = (uint32 *)&linebuf[0][0x20 + (start << 4)];
 
     /* Window name table */
-    nt = (uint32 *)&vram[ntwb | ((line >> 4) << (6 + (reg[12] & 1)))];
+    nt = (uint32 *)&vram[ntwb | ((line >> 3) << (6 + (reg[12] & 1)))];
 
     /* Pattern row index */
-    v_line = (line & 15) << 3;
+    v_line = ((line & 7) << 1 | odd) << 3;
 
     for(column = start; column < end; column++)
     {
@@ -3529,10 +3518,10 @@ void render_bg_m5_im2_vs(int line)
     v_line = (line + yscroll) & pf_row_mask;
 
     /* Plane B name table */
-    nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     atbuf = nt[(index-1) & pf_col_mask];
     DRAW_BG_COLUMN_IM2(atbuf, v_line, xscroll, yscroll)
@@ -3542,16 +3531,16 @@ void render_bg_m5_im2_vs(int line)
   {
     /* Plane B vertical scroll */
 #ifdef LSB_FIRST
-    v_line = (line + (vs[column] >> 16)) & pf_row_mask;
+    v_line = (line + (vs[column] >> 17)) & pf_row_mask;
 #else
-    v_line = (line + vs[column]) & pf_row_mask;
+    v_line = (line + (vs[column] >> 1)) & pf_row_mask;
 #endif
 
     /* Plane B name table */
-    nt = (uint32 *)&vram[ntbb + (((v_line >> 4) << pf_shift) & 0x1FC0)];
+    nt = (uint32 *)&vram[ntbb + (((v_line >> 3) << pf_shift) & 0x1FC0)];
 
     /* Pattern row index */
-    v_line = (v_line & 15) << 3;
+    v_line = (((v_line & 7) << 1) | odd) << 3;
 
     atbuf = nt[index & pf_col_mask];
     DRAW_BG_COLUMN_IM2(atbuf, v_line, xscroll, yscroll)
@@ -4046,6 +4035,7 @@ void render_obj_m5_im2(int line)
   int xpos, width;
   int pixelcount = 0;
   int masked = 0;
+  int odd = odd_frame;
   int max_pixels = MODE5_MAX_SPRITE_PIXELS;
 
   uint8 *src, *s, *lb;
@@ -4105,7 +4095,7 @@ void render_obj_m5_im2(int line)
       attr &= 0x1800;
 
       /* Pattern name offset lookup table */
-      s = &name_lut[((attr >> 3) & 0x300) | (temp << 4) | ((v_line & 0x30) >> 2)];
+      s = &name_lut[((attr >> 3) & 0x300) | (temp << 4) | ((v_line & 0x18) >> 1)];
 
       /* Pointer into line buffer */
       lb = &linebuf[0][0x20 + xpos];
@@ -4120,7 +4110,7 @@ void render_obj_m5_im2(int line)
       width = width >> 3;
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       /* Render sprite patterns */
       for(column = 0; column < width; column ++, lb+=8)
@@ -4155,6 +4145,7 @@ void render_obj_m5_im2_ste(int line)
   int xpos, width;
   int pixelcount = 0;
   int masked = 0;
+  int odd = odd_frame;
   int max_pixels = MODE5_MAX_SPRITE_PIXELS;
 
   uint8 *src, *s, *lb;
@@ -4217,7 +4208,7 @@ void render_obj_m5_im2_ste(int line)
       attr &= 0x1800;
 
       /* Pattern name offset lookup table */
-      s = &name_lut[((attr >> 3) & 0x300) | (temp << 4) | ((v_line & 0x30) >> 2)];
+      s = &name_lut[((attr >> 3) & 0x300) | (temp << 4) | ((v_line & 0x18) >> 1)];
 
       /* Pointer into line buffer */
       lb = &linebuf[1][0x20 + xpos];
@@ -4232,7 +4223,7 @@ void render_obj_m5_im2_ste(int line)
       width = width >> 3;
 
       /* Pattern row index */
-      v_line = (v_line & 15) << 3;
+      v_line = (((v_line & 7) << 1) | odd) << 3;
 
       /* Render sprite patterns */
       for(column = 0; column < width; column ++, lb+=8)
@@ -4282,7 +4273,7 @@ void parse_satb_tms(int line)
   /* no sprites in Text modes */
   if (!(reg[1] & 0x10))
   {
-    /* Sprite Y position */
+    /* Y position */
     int ypos;
 
     /* Sprite list for next line */
@@ -4300,7 +4291,7 @@ void parse_satb_tms(int line)
     /* Parse Sprite Table (32 entries) */
     do
     {
-      /* Read sprite Y position */
+      /* Sprite Y position */
       ypos = st[i << 2];
 
       /* Check end of sprite list marker */
@@ -4366,7 +4357,7 @@ void parse_satb_m4(int line)
   /* Sprite counter (8 max. per line) */
   int count = 0;
 
-  /* Sprite Y position */
+  /* Y position */
   int ypos;
 
   /* Sprite list for next line */
@@ -4390,7 +4381,7 @@ void parse_satb_m4(int line)
   /* Parse Sprite Table (64 entries) */
   do
   {
-    /* Read sprite Y position */
+    /* Sprite Y position */
     ypos = st[i];
 
     /* Check end of sprite list marker (no effect in extended modes) */
@@ -4454,10 +4445,10 @@ void parse_satb_m4(int line)
 
 void parse_satb_m5(int line)
 {
-  /* Sprite Y position */
+  /* Y position */
   int ypos;
 
-  /* Sprite height */
+  /* Sprite height (8,16,24,32 pixels)*/
   int height;
 
   /* Sprite size data */
@@ -4489,8 +4480,8 @@ void parse_satb_m5(int line)
 
   do
   {
-    /* Read sprite Y position from internal SAT cache (9 bits) */
-    ypos = q[link] & 0x1FF;
+    /* Read Y position from internal SAT cache */
+    ypos = (q[link] >> im2_flag) & 0x1FF;
 
     /* Check if sprite Y position has been reached */
     if (line >= ypos)
@@ -4498,7 +4489,7 @@ void parse_satb_m5(int line)
       /* Read sprite size from internal SAT cache */
       size = q[link + 1] >> 8;
 
-      /* Sprite height (8, 16, 24 or 32 pixels) */
+      /* Sprite height */
       height = 8 + ((size & 3) << 3);
 
       /* Y range */
@@ -4538,94 +4529,6 @@ void parse_satb_m5(int line)
 
   /* Update sprite count for next line (line value already incremented) */
   object_count[line & 1] = count;
-}
-
-void parse_satb_m5_im2(int line)
-{
-  /* Sprite Y position */
-  int ypos;
-
-  /* Sprite height */
-  int height;
-
-  /* Sprite size data */
-  int size;
-
-  /* Sprite link data */
-  int link = 0;
-
-  /* Sprite counter */
-  int count = 0;
-
-  /* max. number of rendered sprites (16 or 20 sprites per line by default) */
-  int max = MODE5_MAX_SPRITES_PER_LINE;
-
-  /* max. number of parsed sprites (64 or 80 sprites per line by default) */
-  int total = max_sprite_pixels >> 2;
-
-  /* Pointer to sprite attribute table */
-  uint16 *p = (uint16 *) &vram[satb];
-
-  /* Pointer to internal RAM */
-  uint16 *q = (uint16 *) &sat[0];
-
-  /* Sprite list for next line */
-  object_info_t *object_info = obj_info[(line + 1) & 1];
-
-  /* Adjust line offset */
-  line = ((line + 0x81) << 1) + odd_frame;
-
-  do
-  {
-    /* Read sprite Y position from internal SAT cache (10 bits) */
-    ypos = q[link] & 0x3FF;
-
-    /* Check if sprite Y position has been reached */
-    if (line >= ypos)
-    {
-      /* Read sprite size from internal SAT cache */
-      size = q[link + 1] >> 8;
-
-      /* Sprite height (16, 32, 48 or 64 pixels) */
-      height = 16 + ((size & 3) << 4);
-
-      /* Y range */
-      ypos = line - ypos;
-
-      /* Check if sprite is visible on current line */
-      if (ypos < height)
-      {
-        /* Sprite overflow */
-        if (count == max)
-        {
-          status |= 0x40;
-          break;
-        }
-
-        /* Update sprite list (only name, attribute & xpos are parsed from VRAM) */
-        object_info->attr  = p[link + 2];
-        object_info->xpos  = p[link + 3] & 0x1ff;
-        object_info->ypos  = ypos;
-        object_info->size  = size & 0x0f;
-
-        /* Increment Sprite count */
-        ++count;
-
-        /* Next sprite entry */
-        object_info++;
-      }
-    }
-
-    /* Read link data from internal SAT cache */
-    link = (q[link + 1] & 0x7F) << 2;
-
-    /* Stop parsing if link data points to first entry (#0) or after the last entry (#64 in H32 mode, #80 in H40 mode) */
-    if ((link == 0) || (link >= bitmap.viewport.w)) break;
-  }
-  while (--total);
-
-  /* Update sprite count for next line (line value already incremented) */
-  object_count[(line >> 1) & 1] = count;
 }
 
 

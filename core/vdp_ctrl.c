@@ -1739,35 +1739,19 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
         /* Mega Drive VDP only */
         if (system_hw & SYSTEM_MD)
         {
-          int i, j;
-          uint8 temp[0x400];
-
+          int i;
           if (d & 0x04)
           {
-            /* 16K->64K address decoding */
-            for (i=0; i<0x4000; i+=0x400)
-            {
-              /* make temporary copy of 1KB VRAM chunk */
-              memcpy(temp, vram + i, 0x400);
-
-              /* re-arrange VRAM addressing (first and last words are unchanged) */
-              for (j=2; j<0x3fe; j+=2)
-              {
-                *(uint16 *)(vram + i + ((j << 1) & 0x3FC) + ((j >> 8) & 0x02)) = *(uint16 *)(temp + j);
-              }
-            }
-
             /* Mode 5 rendering */
+            parse_satb = parse_satb_m5;
             update_bg_pattern_cache = update_bg_pattern_cache_m5;
             if (im2_flag)
             {
-              parse_satb = parse_satb_m5_im2;
               render_bg = (reg[11] & 0x04) ? render_bg_m5_im2_vs : render_bg_m5_im2;
               render_obj = (reg[12] & 0x08) ? render_obj_m5_im2_ste : render_obj_m5_im2;
             }
             else
             {
-              parse_satb = parse_satb_m5;
               render_bg = (reg[11] & 0x04) ? (config.enhanced_vscroll ? render_bg_m5_vs_enhanced : render_bg_m5_vs) : render_bg_m5;
               render_obj = (reg[12] & 0x08) ? render_obj_m5_ste : render_obj_m5;
             }
@@ -1800,19 +1784,6 @@ static void vdp_reg_w(unsigned int r, unsigned int d, unsigned int cycles)
           }
           else
           {
-            /* 64K->16K address decoding */
-            for (i=0; i<0x4000; i+=0x400)
-            {
-              /* make temporary copy of 1KB VRAM chunk */
-              memcpy(temp, vram + i, 0x400);
-
-              /* re-arrange VRAM addressing (first and last words are unchanged) */
-              for (j=2; j<0x3fe; j+=2)
-              {
-                *(uint16 *)(vram + i + ((j >> 1) & 0x1FE) + ((j << 8) & 0x200)) = *(uint16 *)(temp + j);
-              }
-            }
-
             /* Mode 4 rendering */
             parse_satb = parse_satb_m4;
             update_bg_pattern_cache = update_bg_pattern_cache_m4;
@@ -2378,8 +2349,8 @@ static void vdp_68k_data_w_m4(unsigned int data)
   }
   else
   {
-    /* VRAM address (16KB) */
-    int index = addr & 0x3FFE;
+    /* VRAM address (interleaved format) */
+    int index = ((addr << 1) & 0x3FC) | ((addr & 0x200) >> 8) | (addr & 0x3C00);
 
     /* Pointer to VRAM */
     uint16 *p = (uint16 *)&vram[index];
