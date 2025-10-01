@@ -1267,7 +1267,7 @@ static void current_search_end(void) {
     rg_menu_visible = true;
     rg_menu.current = &rg_menu.found;
     
-    if (rg_found_glitches.count) {
+    if (rg_found_glitches.count > 0) {
         for (int i = 0; i < rg_found_glitches.count; i++) {
             if (rg_main.glitch[0].address == rg_found_glitches.virt_address[i]) {
                 rg_menu.current->selected_index = i % RG_FOUND_GLITCH_PER_PAGE + 1;

@@ -4,7 +4,7 @@
 #define _ROM_GLITCHER_H_
 
 #define RG_DEBUG 0
-#define RG_VERSION_BASE "v0.3.3"
+#define RG_VERSION_BASE "v0.3.4"
 #define RG_DISABLED_KEY                 -2  // random number that is not gamepad button
 #define RG_MAX_BACKUP_SLOTS             1   // 100 slots * 10000 candidates = ~7 Mb RAM
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
@@ -14,6 +14,7 @@
 #define RG_MAX_REPLAY_GAMEPADS          2       // port 0 and 1
 
 // Битовая маска фильтра инструкций rg_inst_allowed:
+#define TOTAL_INST_BITS 26  // Общее количество битов
 // -- Условные переходы (Bcc)
 #define INST_BHI_BLS    0   // Branch if Higher/Lower or Same
 #define INST_BCC_BCS    1   // Branch if Carry Clear/Carry Set

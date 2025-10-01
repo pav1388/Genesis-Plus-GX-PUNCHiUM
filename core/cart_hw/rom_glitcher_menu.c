@@ -156,7 +156,7 @@ static const char* get_label_inst_allowed(uint8_t index) {
     static char buf[64];
     snprintf(buf, sizeof(buf), "%s:%u/%u", TR(RG_TR_INSTRUCTION_FILTER), 
         (uint8_t)__builtin_popcount(rg_inst_allowed),
-        26);
+        TOTAL_INST_BITS);
     return buf;
 }
 
@@ -168,24 +168,36 @@ static const char* get_label_inst_group(uint8_t index) {
 
     if (index == 0) {
         label = TR(RG_TR_INSTRUCTION_BRANCHING);
-        mask = 0x000000FF;
+        // Условные переходы (Bcc) - биты 0-6
+        mask = (1 << INST_BHI_BLS) | (1 << INST_BCC_BCS) | (1 << INST_BNE_BEQ) |
+            (1 << INST_BVC_BVS) | (1 << INST_BPL_BMI) | (1 << INST_BGE_BLT) |
+            (1 << INST_BGT_BLE);
         total_count = rg_menu.inst_bcc.item_count;
     }
     else if (index == 1) {
         label = TR(RG_TR_INSTRUCTION_SETTING);
-        mask = 0x0000FF00;
+        // Установка (Scc) - биты 9-15
+        mask = (1 << INST_SHI_SLS) | (1 << INST_SCC_SCS) | (1 << INST_SNE_SEQ) |
+            (1 << INST_SVC_SVS) | (1 << INST_SPL_SMI) | (1 << INST_SGE_SLT) |
+            (1 << INST_SGT_SLE);
         total_count = rg_menu.inst_scc.item_count;
     }
     else if (index == 2) {
         label = TR(RG_TR_INSTRUCTION_LOOPING);
-        mask = 0x00FF0000;
+        // Циклы (DBcc) - биты 17-23
+        mask = (1 << INST_DBHI_DBLS) | (1 << INST_DBCC_DBCS) | (1 << INST_DBNE_DBEQ) |
+            (1 << INST_DBVC_DBVS) | (1 << INST_DBPL_DBMI) | (1 << INST_DBGE_DBLT) |
+            (1 << INST_DBGT_DBLE);
         total_count = rg_menu.inst_dbcc.item_count;
     }
     else if (index == 3) {
         label = TR(RG_TR_INSTRUCTION_ARITHMETIC);
-        mask = 0xFF000000;
+        // Арифметические - биты 24-28
+        mask = (1 << INST_ADD_SUB) | (1 << INST_ADDX_SUBX) | (1 << INST_ADDA_SUBA) |
+            (1 << INST_ADDI_SUBI) | (1 << INST_ADDQ_SUBQ);
         total_count = rg_menu.inst_add_sub.item_count;
     }
+
 
     uint8_t active_count = (uint8_t)__builtin_popcount(rg_inst_allowed & mask);
     snprintf(buf[index], sizeof(buf[0]), "%s:%u/%u", label, active_count, total_count);
@@ -254,17 +266,18 @@ static void menu_item_pause_effect(void) {
 }
 
 static void menu_item_toggle_found_instruction(void) {
-    if (rg_found_glitches.count == 0) 
-        return; 
-
     int index = rg_found_glitches.current_page * RG_FOUND_GLITCH_PER_PAGE
         + (rg_menu.current->selected_index - 1);
 
-    if (index >= rg_found_glitches.count)
+    if (rg_found_glitches.count == 0 || index >= rg_found_glitches.count)
         return;
 
     rg_found_glitches.enabled[index] = !rg_found_glitches.enabled[index];
-    rg_found_glitches.enabled_count += rg_found_glitches.enabled[index] ? 1 : -1;
+    rg_found_glitches.enabled_count = 0;
+    
+    for (int i = 0; i < rg_found_glitches.count; i++)
+        if (rg_found_glitches.enabled[i])
+            rg_found_glitches.enabled_count++;
 
     // Обновляем файл с читами
     char cheats_path[RG_PATH_SIZE] = { 0 };
