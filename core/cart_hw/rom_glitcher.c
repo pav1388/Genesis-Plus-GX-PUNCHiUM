@@ -214,35 +214,27 @@ static void instructions_restore(void) {
         rg_main.glitch[i].mod_value = rg_main.glitch[i].initial_value;
 }
 
+static uint8_t invert_value(uint8_t value) {
+    // Bcc + Scc + DBcc + ADDQ/SUBQ
+    if ((value >= 0x62 && value <= 0x6F) || (value >= 0x50 && value <= 0x5F))
+        return value ^ 0b00000001;
+
+    // ADD/SUB, ADDX/SUBX, ADDA/SUBA
+    if ((value >= 0x90 && value <= 0x9F) || (value >= 0xD0 && value <= 0xDF))
+        return value ^ 0b01000000;
+
+    // ADDI/SUBI
+    if (value == 0x04 || value == 0x06)
+        return value ^ 0b00000010;
+}
+
 static void instructions_inversion(void) {
     if (!rg_main.glitch)
         return;
     
     for (uint32_t i = rg_main.range_start; 
-        i < rg_main.range_start + rg_main.range_size && i < rg_main.glitch_count; 
-        i++) {
-        uint8_t value = rg_main.glitch[i].initial_value;
-
-        // Bcc + Scc + DBcc + ADDQ/SUBQ
-        if ((value >= 0x62 && value <= 0x6F) || (value >= 0x50 && value <= 0x5F)) {
-            rg_main.glitch[i].mod_value = value ^ 0b00000001;
-            continue;
-        }
-        
-        // ADD/SUB, ADDX/SUBX, ADDA/SUBA
-        if ((value >= 0x90 && value <= 0x9F) || (value >= 0xD0 && value <= 0xDF)) {
-            rg_main.glitch[i].mod_value = value ^ 0b01000000;
-            continue;
-        }
-
-        // ADDI/SUBI
-        if (value == 0x04 || value == 0x06) {
-            rg_main.glitch[i].mod_value = value ^ 0b00000010;
-            continue;
-        }
-        
-        rg_main.glitch[i].mod_value = value;
-    }
+            i < rg_main.range_start + rg_main.range_size && i < rg_main.glitch_count; i++)
+        rg_main.glitch[i].mod_value = invert_value(rg_main.glitch[i].initial_value);
 }
 
 // загрузка бэкапа до локализации и удаление найденной инструкции
@@ -401,12 +393,15 @@ static void step2_not_found(void) {
 
     if (rg_main.range_start + rg_main.range_size >= rg_main.glitch_count) {
         if (rg_main.range_size == 1 || rg_main.range_start == 0) {
-            if (rg_main.localizing)
+            if (rg_main.localizing) {
                 rg_msg(RG_MSG_ERROR, "%s [G03]", TR(RG_TR_ERROR_ADDRESS));
-            else
+                current_search_end();
+            }
+            else {
                 rg_msg(RG_MSG_ERROR, "%s [G04]", TR(RG_TR_ERROR_ADDRESS));
+                rg_force_stop();
+            }
 
-            current_search_end();
             return;
         }
         else {
@@ -899,6 +894,9 @@ static uint16_t get_rom_checksum(uint8_t* rom, uint32_t size) {
 
 // применение к ROM глитчей из списка найденных
 static void apply_found_glitches(void) {
+    if (rg_found_glitches.count == 0)
+        return;
+
     rg_found_glitches.enabled_count = 0;
 
     for (int i = 0; i < rg_found_glitches.count; i++) {
@@ -1187,10 +1185,10 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 
     // если заголовок не был удалён эмулятором
     if (!rg_rom_has_header) {
-        uint16_t header_checksum = (cart.rom[0x18E] << 8) | cart.rom[0x18F];
+        uint16_t checksum_in_header = (cart.rom[0x18E] << 8) | cart.rom[0x18F];
         uint16_t real_checksum = get_rom_checksum(((uint8*)cart.rom) + RG_ROM_HEADER_SIZE, cart.romsize - RG_ROM_HEADER_SIZE);
         // обновление контрольной суммы в заголовке
-        if (header_checksum != real_checksum) {
+        if (checksum_in_header != real_checksum) {
             cart.rom[0x18E] = (real_checksum >> 8) & 0xFF;
             cart.rom[0x18F] = real_checksum & 0xFF;
         }
@@ -1567,7 +1565,7 @@ static bool cheats_file_parse(void) {
     rg_found_glitches.count = 0;
     rg_found_glitches.enabled_count = 0;
 
-    char line[256];
+    char line[512];
     int current_cheat_num = 0;
     uint32_t current_address = 0;
     uint8_t current_mod_value = 0;
@@ -1608,9 +1606,10 @@ static bool cheats_file_parse(void) {
                     // Если у нас есть код чита, обрабатываем полный блок
                     if (has_code) {
                         rg_found_glitches.real_address[rg_found_glitches.count] = current_address;
-                        rg_found_glitches.virt_address[rg_found_glitches.count] = address_offset_calculation(current_address, REAL_TO_VIRT);
+                        rg_found_glitches.virt_address[rg_found_glitches.count] = 
+                            address_offset_calculation(current_address, REAL_TO_VIRT);
                         rg_found_glitches.mod_value[rg_found_glitches.count] = current_mod_value;
-                        rg_found_glitches.initial_value[rg_found_glitches.count] = current_mod_value ^ 1;
+                        rg_found_glitches.initial_value[rg_found_glitches.count] = invert_value(current_mod_value);
 
                         if (strcmp(quote_start, "true") == 0) {
                             rg_found_glitches.enabled[rg_found_glitches.count] = true;
@@ -1660,11 +1659,11 @@ void rg_game_load_state(void) {
 }
 
 /*if (log_cb) {
-                int offset = 0;
-                for (int i = 0; i < rg_input_replay.length; i++)
-                    offset += snprintf(rg_log + offset, sizeof(rg_log) - offset, " %u", rg_input_replay.sequence[i]);
-
-                log_cb(RETRO_LOG_INFO, "\n\n%s\n\n\n", rg_log);
+    int offset = 0;
+    for (int i = 0; i < rg_input_replay.length; i++)
+        offset += snprintf(rg_log + offset, sizeof(rg_log) - offset, " %u", rg_input_replay.sequence[i]);
+    
+    log_cb(RETRO_LOG_INFO, "\n\n%s\n\n\n", rg_log);
 }*/
 
 
