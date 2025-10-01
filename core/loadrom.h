@@ -74,5 +74,12 @@ extern char *get_company(void);
 extern char *get_peripheral(int index);
 extern void getrominfo(char *romheader);
 
+/* ROM Glitcher */
+extern bool rg_rom_in_mdx;
+extern bool rg_rom_is_byte_swapped;
+extern bool rg_rom_has_header;
+extern bool rg_rom_was_deinterleaved;
+extern int32_t rg_menu_button;
+
 #endif /* _LOADROM_H_ */
 

@@ -102,6 +102,7 @@ static bool m68k_opcode_valid(uint16_t opcode) {
 // https://www.emu-land.net/forum/index.php/topic,91585.msg1655231.html#msg1655231
 
 // edited for Sega MD (odd-byte branch opcodes removed, even offset branch opcodes 0x**FE removed)
+// valid - 66.76%, illegal - 33.24%
 static const bool m68k_opcode_valid_table[65536] = {
 	true, true, true, true, true, true, true, true, 		// 0000, 0001, 0002, 0003, 0004, 0005, 0006, 0007,
 	false, false, false, false, false, false, false, false, // 0008, 0009, 000a, 000b, 000c, 000d, 000e, 000f,

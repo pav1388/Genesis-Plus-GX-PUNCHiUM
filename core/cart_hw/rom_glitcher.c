@@ -5,9 +5,6 @@
 // perfect_genius - glitcher idea, pav13 - implementation
 // https://www.emu-land.net/forum/index.php/topic,88982.msg1652059.html#msg1652059
 
-#define VIRT_TO_REAL true
-#define REAL_TO_VIRT false
-
 #include "rom_glitcher.h"
 #include "rom_glitcher_menu.h"
 #include "rom_glitcher_translation.h"
@@ -30,6 +27,13 @@ static bool cheats_file_save(uint32_t real_address,
     uint8_t initial_value, uint8_t mod_value, char* file_path, int file_path_size);
 static void free_and_reset_memory(void);
 static uint32_t address_offset_calculation(uint32_t address, bool direction);
+
+const char* rg_instr_mnemonic[TOTAL_INST_BITS] = {
+    "BHI/BLS", "BCC/BCS", "BNE/BEQ", "BVC/BVS", "BPL/BMI", "BGE/BLT", "BGT/BLE", "/",
+    "/", "SHI/SLS", "SCC/SCS", "SNE/SEQ", "SVC/SVS", "SPL/SMI", "SGE/SLT", "SGT/SLE",
+    "/", "DBHI/LS", "DBCC/CS", "DBNE/EQ", "DBVC/VS", "DBPL/MI", "DBGE/LT", "DBGT/LE",
+    "ADD/SUB", "ADDX/SUBX", "ADDA/SUBA", "ADDI/SUBI", "ADDQ/SUBQ", "/", "/", "/"
+};
 
 rom_glitcher_main_t rg_main = {
     .glitch = NULL,
@@ -58,15 +62,16 @@ rom_glitcher_input_replay_t rg_input_replay = {
     .length = 0
 };
 
-uint32_t rg_inst_allowed = 0b100; // default allowed only BEQ/BNE
+static retro_input_state_t input_cb_copy;
+uint32_t rg_inst_allowed = (1 << INST_BNE_BEQ); // default allowed only BNE/BEQ
 static rom_glitcher_bug_range_t* bug_range = NULL;
 rom_glitcher_bug_glitches_t rg_bug_glitches;
 static uint16_t bug_range_count = 0;
 static uint16_t bug_range_capacity = 0;
 static rom_glitcher_bitmap_t rg_bitmap;
 static rom_glitcher_main_t rg_backup[RG_MAX_BACKUP_SLOTS];
-static uint8_t rg_backup_index = 0;
-uint8_t rg_backup_count = 0;
+static uint8_t backup_index = 0;
+static uint8_t backup_count = 0;
 static rom_glitcher_main_t rg_backup_before_local;
 rom_glitcher_button_state_t rg_button_states[7] = { 0 }; // Key 0:Menu, 1:Prev, 2:Next, 3:Confirm/Found, 4:Cancel/Bug, 5:NotFound, 6:StepBack
 int32_t rg_menu_button = RG_DISABLED_KEY;
@@ -570,15 +575,15 @@ static void step4_back(void) {
         return;
     }
 
-    if (rg_backup_count == 0) {
+    if (backup_count == 0) {
         rg_msg(RG_MSG_INFO, "%s [B02]", TR(RG_TR_ERROR_BACKUP));
         return;
     }
 
-    rg_backup_index = (rg_backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
-    rg_backup_count--;
+    backup_index = (backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
+    backup_count--;
 
-    rom_glitcher_main_t* slot = &rg_backup[rg_backup_index];
+    rom_glitcher_main_t* slot = &rg_backup[backup_index];
 
     if (rg_main.glitch) {
         free(rg_main.glitch);
@@ -641,7 +646,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         if (rg_input_replay.length > 0) {
             rg_input_replay.play = true;
             rg_input_replay.play_count = 0;
-            rg_input_replay.input_cb_copy = input_state_cb;
+            input_cb_copy = input_state_cb;
             input_state_cb = hook_input_state_cb;
         }
 
@@ -678,10 +683,10 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
     // ----------------- rg_input_replay.play -----------------
     else if (rg_input_replay.play && rg_input_replay.length > 0) {
         if (libretro_supports_bitmasks)
-            current_mask[0] = rg_input_replay.input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+            current_mask[0] = input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
         else
             for (int id = 0; id <= RETRO_DEVICE_ID_JOYPAD_R3; id++)
-                if (rg_input_replay.input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, id))
+                if (input_cb_copy(0, RETRO_DEVICE_JOYPAD, 0, id))
                     current_mask[0] |= (1 << id);
         
         if (rg_input_replay.play_count < rg_input_replay.length) {
@@ -692,7 +697,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         }
         else {
             rg_input_replay.play = false;
-            input_state_cb = rg_input_replay.input_cb_copy;
+            input_state_cb = input_cb_copy;
             rg_menu_visible = true;
             rg_menu.current = &rg_menu.search;
             rg_menu.current->selected_index = 0;
@@ -718,7 +723,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         }
         else if (rg_input_replay.play) {
             rg_input_replay.play = false;
-            input_state_cb = rg_input_replay.input_cb_copy;
+            input_state_cb = input_cb_copy;
             rg_menu_visible = true;
             rg_menu.current = &rg_menu.search;
             rg_menu.current->selected_index = 0;
@@ -791,7 +796,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         if (!confirm_found_key && rg_button_states[3].was_pressed && !rg_button_states[3].is_processed) {
             if (rg_input_replay.play) {
                 rg_input_replay.play = false;
-                input_state_cb = rg_input_replay.input_cb_copy;
+                input_state_cb = input_cb_copy;
                 step3_found();
             }
             else if (rg_menu.current == &rg_menu.search && rg_menu.current->selected_index == 0)
@@ -810,7 +815,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         if (!cancel_bug_key && rg_button_states[4].was_pressed && !rg_button_states[4].is_processed) {
             if (rg_input_replay.play) {
                 rg_input_replay.play = false;
-                input_state_cb = rg_input_replay.input_cb_copy;
+                input_state_cb = input_cb_copy;
                 step1_bug();
             }
             else if (rg_menu.current == &rg_menu.inst_add_sub || rg_menu.current == &rg_menu.inst_bcc ||
@@ -848,7 +853,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         if (!not_found_key && rg_button_states[5].was_pressed && !rg_button_states[5].is_processed) {
             if (rg_input_replay.play) {
                 rg_input_replay.play = false;
-                input_state_cb = rg_input_replay.input_cb_copy;
+                input_state_cb = input_cb_copy;
                 step2_not_found();
             }
             else if (rg_menu.current == &rg_menu.search && rg_menu.current->selected_index == 0)
@@ -863,7 +868,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         if (!step_back_key && rg_button_states[6].was_pressed && !rg_button_states[6].is_processed) {
             if (rg_input_replay.play) {
                 rg_input_replay.play = false;
-                input_state_cb = rg_input_replay.input_cb_copy;
+                input_state_cb = input_cb_copy;
                 step4_back();
             }
             else if (rg_menu.current == &rg_menu.search && rg_menu.current->selected_index == 0)
@@ -1230,7 +1235,7 @@ void rg_init(uint8_t* rom_data, uint32_t rom_size) {
 
 // сохранение предыдущего состояния отсеивания кандидатов
 static void create_step_backup(void) {
-    rom_glitcher_main_t* slot = &rg_backup[rg_backup_index];
+    rom_glitcher_main_t* slot = &rg_backup[backup_index];
 
     if (slot->glitch) {
         free(slot->glitch);
@@ -1257,9 +1262,9 @@ static void create_step_backup(void) {
         return;
     }
 
-    rg_backup_index = (rg_backup_index + 1) % RG_MAX_BACKUP_SLOTS;
-    if (rg_backup_count < RG_MAX_BACKUP_SLOTS)
-        rg_backup_count++;
+    backup_index = (backup_index + 1) % RG_MAX_BACKUP_SLOTS;
+    if (backup_count < RG_MAX_BACKUP_SLOTS)
+        backup_count++;
 }
 
 // завершие текущего поиска
@@ -1304,8 +1309,8 @@ static void free_and_reset_memory(void) {
             memset(&rg_backup[i], 0, sizeof(rg_backup[i]));
         }
     }
-    rg_backup_index = 0;
-    rg_backup_count = 0;
+    backup_index = 0;
+    backup_count = 0;
 
     if (rg_main.glitch) {
         free(rg_main.glitch);
@@ -1461,12 +1466,18 @@ static bool cheats_file_save(uint32_t real_address,
     }
 
     // Создаем новый блок читов
-    char new_block[256];
+    char new_block[512];
+    char filter[256] = { 0 };
+
+    for (int i = 0; i < TOTAL_INST_BITS; i++)
+        if (rg_inst_allowed & (1 << i))
+            snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s ", rg_instr_mnemonic[i]);
+
     snprintf(new_block, sizeof(new_block),
-        "cheat%d_desc = \"Glitch %d, steps %u (0x%02X->0x%02X)\"\n"
+        "cheat%d_desc = \"Glitch[%d] step[%u] mod[%02X->%02X] filter[%s]\"\n"
         "cheat%d_code = \"%06X:%02X\"\n"
         "cheat%d_enable = \"true\"\n\n",
-        cheats_count + 1, cheats_count + 1, rg_main.step_count, initial_value, mod_value,
+        cheats_count + 1, cheats_count + 1, rg_main.step_count, initial_value, mod_value, filter,
         cheats_count + 1, real_address, mod_value,
         cheats_count + 1);
 
@@ -1889,7 +1900,7 @@ static void detect_bug(void) {
 }
 
 static void remove_one_bug_from_rg_backup(uint32_t del_addr) {
-    uint32_t backup_index = (rg_backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
+    uint32_t backup_index = (backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
 
     if (!rg_backup[backup_index].glitch || rg_backup[backup_index].glitch_count == 0)
         return;
@@ -1912,8 +1923,8 @@ static void remove_one_bug_from_rg_backup(uint32_t del_addr) {
                 free(rg_backup[backup_index].glitch);
                 rg_backup[backup_index].glitch = NULL;
                 backup_index = (backup_index - 1 + RG_MAX_BACKUP_SLOTS) % RG_MAX_BACKUP_SLOTS;
-                rg_backup_index = backup_index;
-                rg_backup_count--;
+                backup_index = backup_index;
+                backup_count--;
                 i = 0;
                 continue;
             }

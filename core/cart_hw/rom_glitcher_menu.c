@@ -1,10 +1,7 @@
 // rom_glitcher_menu.c
 
 #include "rom_glitcher_menu.h"
-#include "rom_glitcher.h"
 #include "rom_glitcher_translation.h"
-#include "shared.h"
-#include <stdbool.h>
 
 static const char* get_label_launch_glitcher(uint8_t index);
 static const char* get_label_stop_glitcher(uint8_t index);
@@ -32,12 +29,6 @@ static void menu_item_open_inst_add_sub(void);
 static void menu_item_game_save_state(void);
 
 static bool refresh_menu_log = true;
-static const char* instr_mnemonic[] = {
-    "BHI/BLS", "BCC/BCS", "BNE/BEQ", "BVC/BVS", "BPL/BMI", "BGE/BLT", "BGT/BLE", "/",
-    "/", "SHI/SLS", "SCC/SCS", "SNE/SEQ", "SVC/SVS", "SPL/SMI", "SGE/SLT", "SGT/SLE",
-    "/", "DBHI/LS", "DBCC/CS", "DBNE/EQ", "DBVC/VS", "DBPL/MI", "DBGE/LT", "DBGT/LE",
-    "ADD/SUB", "ADDX/SUBX", "ADDA/SUBA", "ADDI/SUBI", "ADDQ/SUBQ", "/", "/", "/"
-};
 
 static rom_glitcher_menu_item_t menu_launch[] = {
     { get_label_launch_glitcher, rg_launch_glitcher},           // Launch Glitcher
@@ -156,7 +147,7 @@ static const char* get_label_inst_allowed(uint8_t index) {
     static char buf[64];
     snprintf(buf, sizeof(buf), "%s:%u/%u", TR(RG_TR_INSTRUCTION_FILTER), 
         (uint8_t)__builtin_popcount(rg_inst_allowed),
-        TOTAL_INST_BITS);
+        TOTAL_INST_BITS_USED);
     return buf;
 }
 
@@ -256,7 +247,7 @@ static const char* get_label_menu_inst_allowed(uint8_t index) {
     else if (rg_menu.current == &rg_menu.inst_add_sub)
         new_index = index + 24;
 
-    snprintf(buf[index], sizeof(buf[index]), "%s-%s", instr_mnemonic[new_index],
+    snprintf(buf[index], sizeof(buf[index]), "%s-%s", rg_instr_mnemonic[new_index],
         (rg_inst_allowed & (1 << new_index)) ? TR(RG_TR_ON) : TR(RG_TR_OFF));
     return buf[index];
 }
@@ -379,7 +370,7 @@ static void menu_item_inst_allowed(void) {
     uint8_t index = 0;
 
     if (rg_menu.current == &rg_menu.inst_bcc)
-        ;
+        index = 0;
     else if (rg_menu.current == &rg_menu.inst_scc)
         index += 8;
     else if (rg_menu.current == &rg_menu.inst_dbcc)
@@ -462,12 +453,12 @@ void rg_menu_show(void) {
     if (refresh_menu_log) {
         refresh_menu_log = false;
         char log_text[164];
-        char mode[128] = { 0 };
         uint32_t percent = (rg_main.range_size * 1000) / rg_main.glitch_count;
+        char filter[256] = { 0 };
 
-        for (int i = 0; i < 32; i++)
+        for (int i = 0; i < TOTAL_INST_BITS; i++)
             if (rg_inst_allowed & (1 << i))
-                snprintf(mode + strlen(mode), sizeof(mode) - strlen(mode), "%s ", instr_mnemonic[i]);
+                snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s ", rg_instr_mnemonic[i]);
 
         snprintf(log_text, sizeof(log_text), "%s %u (%s)  |  %s %u/%u  |  %u.%u%%  |  %s %u:%u  |  %s",
             TR(RG_TR_STEP),
@@ -476,7 +467,7 @@ void rg_menu_show(void) {
             rg_main.glitch_count, rg_total_glitch_count,
             (rg_main.range_size > 0) ? percent / 10 : 0, (rg_main.range_size > 0) ? percent % 10 : 0,
             TR(RG_TR_RANGE),
-            rg_main.range_start, rg_main.range_size, mode);
+            rg_main.range_start, rg_main.range_size, filter);
         struct retro_message msg_log = { log_text, 100 * rg_fps }; // {текст, время отображения в кадрах}
         environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_log);
     }

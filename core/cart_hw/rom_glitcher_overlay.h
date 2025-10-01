@@ -10,6 +10,9 @@
 #define HERO_WIDTH     62
 #define HERO_HEIGHT    48
 
+extern rom_glitcher_main_t rg_main;
+extern uint32_t rg_total_glitch_count;
+
 static const uint16_t pixel_art_hero[] = {
 	// 'Rex - Dinosaurs for Hire_hero', 62x48px
 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,

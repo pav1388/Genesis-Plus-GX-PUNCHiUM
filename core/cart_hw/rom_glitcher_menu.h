@@ -3,16 +3,12 @@
 #ifndef _ROM_GLITCHER_MENU_H_
 #define _ROM_GLITCHER_MENU_H_
 
-#define RG_FOUND_GLITCH_PER_PAGE    6
-#define RG_MSG_DEBUG        0
-#define RG_MSG_INFO         1
-#define RG_MSG_ERROR        2
-#define RG_MSG_FOUND        3
-#define RG_MSG_REPLAY_REC   4
-#define RG_MSG_REPLAY_PLAY  5
-
+#include "rom_glitcher_defines.h"
+#include "rom_glitcher_types.h"
+#include "rom_glitcher.h"
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     const char* (*get_label)(uint8_t index);
@@ -38,8 +34,20 @@ typedef struct {
     rom_glitcher_menu_t inst_add_sub;
 } rom_glitcher_menu_manager_t;
 
+extern const char* rg_instr_mnemonic[];
+extern rom_glitcher_button_state_t rg_button_states[7];
 extern rom_glitcher_menu_manager_t rg_menu;
+extern rom_glitcher_found_glitches_t rg_found_glitches;
+extern rom_glitcher_input_replay_t rg_input_replay;
+extern rom_glitcher_main_t rg_main;
+extern rom_glitcher_bug_glitches_t rg_bug_glitches;
+extern uint32_t rg_total_glitch_count;
 extern uint32_t rg_inst_allowed;
+extern uint16_t rg_fps;
+extern uint8_t rg_pause_effect;
+extern bool rg_clear_bug_range;
+extern bool rg_found_glitches_modified;
+extern bool rg_menu_visible;
 
 void rg_menu_show(void);
 void rg_menu_hide(void);

@@ -3255,7 +3255,7 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
 	apply_cheats();
 }
 
-const struct retro_game_info* rg_last_game;
+const struct retro_game_info* rg_last_game; // ROM Glitcher
 
 bool retro_load_game(const struct retro_game_info *info)
 {

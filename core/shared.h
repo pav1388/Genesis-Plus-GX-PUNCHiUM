@@ -36,6 +36,9 @@
 #include "areplay.h"
 #include "svp.h"
 #include "state.h"
+
+// ROM Glitcher
+#include "rom_glitcher_defines.h"
 #include "rom_glitcher.h"
 #include "rom_glitcher_menu.h"
 
