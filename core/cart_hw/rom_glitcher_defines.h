@@ -21,7 +21,7 @@
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
 #define RG_MAX_REPLAY_FRAMES            7200    // 60 FPS * 120 sec
 #define RG_MAX_REPLAY_GAMEPADS          2       // port 0 and 1
-#define RG_MAX_BACKUP_SLOTS             1
+#define RG_MAX_BACKUP_SLOTS             33
 
 // Настройки меню
 #define RG_FOUND_GLITCH_PER_PAGE        6

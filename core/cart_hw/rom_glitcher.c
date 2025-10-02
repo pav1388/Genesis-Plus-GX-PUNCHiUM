@@ -104,7 +104,7 @@ static uint32_t xorshift(uint32_t* seed) {
 static void handle_pause_frame(void) {
     static uint8_t old_pause_effect = 255;
     static uint16_t* pause_frame = NULL;
-
+    
     if (rg_menu_visible) {
         if (old_pause_effect != rg_pause_effect) {
             if (pause_frame) {
@@ -269,6 +269,16 @@ static void load_step_back_before_local(void) {
                     break;
                 }
             }
+
+            for (int i = 0; i < RG_MAX_BACKUP_SLOTS; i++) {
+                if (rg_backup[i].glitch) {
+                    free(rg_backup[i].glitch);
+                    rg_backup[i].glitch = NULL;
+                    memset(&rg_backup[i], 0, sizeof(rg_backup[i]));
+                }
+            }
+            backup_index = 0;
+            backup_count = 0;
 
             rg_msg(RG_MSG_INFO, TR(RG_TR_CONTINUE_SEARCH));
         }
@@ -467,6 +477,8 @@ static void step3_found(void) {
         return;
     }
 
+    create_step_backup();
+    
     if (!rg_main.localizing) {
         // отдельный бэкап-чекпоинт перед локализацией
         rom_glitcher_main_t* slot = &rg_backup_before_local;
@@ -492,8 +504,6 @@ static void step3_found(void) {
 
         rg_main.localizing = true;
     }
-
-    create_step_backup();
 
     if (rg_main.range_size == 1 || rg_main.glitch_count == 1) {
         // адрес найден
@@ -1818,8 +1828,11 @@ static void bug_range_comparison(const rom_glitcher_bug_range_t* src,
 }
 
 static void detect_bug(void) {
+    if (rg_main.range_size == 0)
+        return;
+
     if (bug_range_count >= bug_range_capacity) {
-        uint32_t temp_capacity = bug_range_capacity + 256;
+        uint32_t temp_capacity = bug_range_capacity + 128;
 
         if (temp_capacity >= UINT16_MAX) {
             // Over 65,000 bug-steps. Start new search
