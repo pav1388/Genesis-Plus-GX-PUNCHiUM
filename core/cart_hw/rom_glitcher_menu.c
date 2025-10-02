@@ -7,6 +7,7 @@ static const char* get_label_launch_glitcher(uint8_t index);
 static const char* get_label_stop_glitcher(uint8_t index);
 static const char* get_label_options(uint8_t index);
 static const char* get_label_game_save_state(uint8_t index);
+static const char* get_label_hide_replay_progress(uint8_t index);
 static const char* get_label_pause_effect(uint8_t index);
 static const char* get_label_search(uint8_t index);
 static const char* get_label_list_of_found(uint8_t index);
@@ -27,8 +28,10 @@ static void menu_item_open_inst_scc(void);
 static void menu_item_open_inst_dbcc(void);
 static void menu_item_open_inst_add_sub(void);
 static void menu_item_game_save_state(void);
+static void menu_item_hide_replay_progress(void);
 
 static bool refresh_menu_log = true;
+static bool hide_replay_progress_bar = false;
 
 static rom_glitcher_menu_item_t menu_launch[] = {
     { get_label_launch_glitcher, rg_launch_glitcher},           // Launch Glitcher
@@ -45,6 +48,7 @@ static rom_glitcher_menu_item_t menu_search[] = {
 
 static rom_glitcher_menu_item_t menu_options[] = {
     { get_label_game_save_state, menu_item_game_save_state },   // Save state
+    { get_label_hide_replay_progress, menu_item_hide_replay_progress },   // Hide play bar
     { get_label_pause_effect, menu_item_pause_effect }          // Pause effect
 };
 
@@ -123,6 +127,7 @@ static const char* get_label_launch_glitcher(uint8_t index) { return TR(RG_TR_LA
 static const char* get_label_stop_glitcher(uint8_t index) { return TR(RG_TR_STOP_GLITCHER); }
 static const char* get_label_options(uint8_t index) { return TR(RG_TR_OPTIONS); }
 static const char* get_label_game_save_state(uint8_t index) { return TR(RG_TR_SAVE_STATE); }
+static const char* get_label_hide_replay_progress(uint8_t index) { return TR(RG_TR_HIDE_REPLAY_PROGRESS); }
 static const char* get_label_pause_effect(uint8_t index) { return TR(RG_TR_PAUSE_EFFECT); }
 
 static const char* get_label_search(uint8_t index) {
@@ -159,33 +164,22 @@ static const char* get_label_inst_group(uint8_t index) {
 
     if (index == 0) {
         label = TR(RG_TR_INSTRUCTION_BRANCHING);
-        // Условные переходы (Bcc) - биты 0-6
-        mask = (1 << INST_BHI_BLS) | (1 << INST_BCC_BCS) | (1 << INST_BNE_BEQ) |
-            (1 << INST_BVC_BVS) | (1 << INST_BPL_BMI) | (1 << INST_BGE_BLT) |
-            (1 << INST_BGT_BLE);
+        mask = BCC_MASK;
         total_count = rg_menu.inst_bcc.item_count;
     }
     else if (index == 1) {
         label = TR(RG_TR_INSTRUCTION_SETTING);
-        // Установка (Scc) - биты 9-15
-        mask = (1 << INST_SHI_SLS) | (1 << INST_SCC_SCS) | (1 << INST_SNE_SEQ) |
-            (1 << INST_SVC_SVS) | (1 << INST_SPL_SMI) | (1 << INST_SGE_SLT) |
-            (1 << INST_SGT_SLE);
+        mask = SCC_MASK;
         total_count = rg_menu.inst_scc.item_count;
     }
     else if (index == 2) {
         label = TR(RG_TR_INSTRUCTION_LOOPING);
-        // Циклы (DBcc) - биты 17-23
-        mask = (1 << INST_DBHI_DBLS) | (1 << INST_DBCC_DBCS) | (1 << INST_DBNE_DBEQ) |
-            (1 << INST_DBVC_DBVS) | (1 << INST_DBPL_DBMI) | (1 << INST_DBGE_DBLT) |
-            (1 << INST_DBGT_DBLE);
+        mask = DBCC_MASK;
         total_count = rg_menu.inst_dbcc.item_count;
     }
     else if (index == 3) {
         label = TR(RG_TR_INSTRUCTION_ARITHMETIC);
-        // Арифметические - биты 24-28
-        mask = (1 << INST_ADD_SUB) | (1 << INST_ADDX_SUBX) | (1 << INST_ADDA_SUBA) |
-            (1 << INST_ADDI_SUBI) | (1 << INST_ADDQ_SUBQ);
+        mask = ARITH_MASK;
         total_count = rg_menu.inst_add_sub.item_count;
     }
 
@@ -404,6 +398,7 @@ static void menu_item_open_inst_bcc(void) { rg_menu.current = &rg_menu.inst_bcc;
 static void menu_item_open_inst_scc(void) { rg_menu.current = &rg_menu.inst_scc; }
 static void menu_item_open_inst_dbcc(void) { rg_menu.current = &rg_menu.inst_dbcc; }
 static void menu_item_open_inst_add_sub(void) { rg_menu.current = &rg_menu.inst_add_sub; }
+static void menu_item_hide_replay_progress(void) { hide_replay_progress_bar = !hide_replay_progress_bar; }
 
 static void menu_item_game_save_state(void) {
     rg_game_save_state();
@@ -503,7 +498,14 @@ void rg_msg(uint8_t context, const char* raw_msg, ...) {
     switch (context) {
         case RG_MSG_REPLAY_PLAY: {
             snprintf(msg, sizeof(msg), TR(RG_TR_RG_PLAYBACK),
-                rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_B) : rg_main.localizing ? TR(RG_TR_L) : TR(RG_TR_S));
+                rg_main.step_count, rg_bug_glitches.count ? TR(RG_TR_B) : rg_main.localizing ? TR(RG_TR_L) : TR(RG_TR_S)); 
+
+            if (hide_replay_progress_bar) {
+                struct retro_message msg_bottom = { msg, 3 };
+                environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_bottom);
+                return;
+            }
+
             duration = 33;
             priority = 6;
             type = RETRO_MESSAGE_TYPE_PROGRESS;
@@ -528,6 +530,13 @@ void rg_msg(uint8_t context, const char* raw_msg, ...) {
         }
         case RG_MSG_REPLAY_REC: {
             snprintf(msg, sizeof(msg), TR(RG_TR_RG_RECORD));
+
+            if (hide_replay_progress_bar) {
+                struct retro_message msg_bottom = { msg, 3 };
+                environ_cb(RETRO_ENVIRONMENT_SET_MESSAGE, &msg_bottom);
+                return;
+            }
+
             duration = 33;
             priority = 6;
             type = RETRO_MESSAGE_TYPE_PROGRESS;
@@ -547,7 +556,7 @@ void rg_msg(uint8_t context, const char* raw_msg, ...) {
     }
 
     struct retro_message_ext out_msg = {
-        .msg = msg,                         // текст сообщения
+        .msg = msg,                              // текст сообщения
         .duration = duration,                    // время отображения в мс
         .priority = priority,                    // приоритет очереди отображения
         .level = level,                          // уровень сообщения (иконка сообщения)

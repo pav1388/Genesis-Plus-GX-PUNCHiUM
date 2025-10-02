@@ -33,6 +33,8 @@
 #define RG_MSG_REPLAY_PLAY  5
 
 // Битовая маска фильтра инструкций rg_inst_allowed:
+#define TOTAL_INST_BITS_USED 26
+
 typedef enum {
     // -- Условные переходы (Bcc)
     INST_BHI_BLS = 0,   // Branch if Higher/Lower or Same
@@ -45,7 +47,7 @@ typedef enum {
     INST_SKIP_7,        // (заглушка)
 
     // -- Установка условий (Scc)
-    INST_SKIP_8,        // (заглушка)
+    INST_SKIP_8 = 8,        // (заглушка)
     INST_SHI_SLS,       // Set if Higher/Lower or Same
     INST_SCC_SCS,       // Set if Carry Clear/Carry Set
     INST_SNE_SEQ,       // Set if Not Equal/Equal
@@ -55,7 +57,7 @@ typedef enum {
     INST_SGT_SLE,       // Set if Greater Than/Less or Equal
 
     // -- Циклы (DBcc)
-    INST_SKIP_16,       // (заглушка)
+    INST_SKIP_16 = 16,       // (заглушка)
     INST_DBHI_DBLS,     // Decrement and Branch if Higher/Lower or Same
     INST_DBCC_DBCS,     // Decrement and Branch if Carry Clear/Carry Set
     INST_DBNE_DBEQ,     // Decrement and Branch if Not Equal/Equal
@@ -65,7 +67,7 @@ typedef enum {
     INST_DBGT_DBLE,     // Decrement and Branch if Greater Than/Less or Equal
 
     // -- Арифметические
-    INST_ADD_SUB,       // ADD/SUB   (Addition/Subtraction)
+    INST_ADD_SUB = 24,       // ADD/SUB   (Addition/Subtraction)
     INST_ADDX_SUBX,     // ADDX/SUBX (Addition/Subtraction with Expansion)
     INST_ADDA_SUBA,     // ADDA/SUBA (Addition/Subtraction of Addresses)
     INST_ADDI_SUBI,     // ADDI/SUBI (Addition/Subtraction of Immediate Values)
@@ -77,8 +79,22 @@ typedef enum {
     TOTAL_INST_BITS = 32
 } InstructionBit;
 
-// Битовая маска для инструкций
-#define TOTAL_INST_BITS_USED 26
+enum {
+    BCC_MASK = (1 << INST_BHI_BLS) | (1 << INST_BCC_BCS) | (1 << INST_BNE_BEQ) |
+        (1 << INST_BVC_BVS) | (1 << INST_BPL_BMI) | (1 << INST_BGE_BLT) |
+        (1 << INST_BGT_BLE),
+
+    SCC_MASK = (1 << INST_SHI_SLS) | (1 << INST_SCC_SCS) | (1 << INST_SNE_SEQ) |
+        (1 << INST_SVC_SVS) | (1 << INST_SPL_SMI) | (1 << INST_SGE_SLT) |
+        (1 << INST_SGT_SLE),
+
+    DBCC_MASK = (1 << INST_DBHI_DBLS) | (1 << INST_DBCC_DBCS) | (1 << INST_DBNE_DBEQ) |
+        (1 << INST_DBVC_DBVS) | (1 << INST_DBPL_DBMI) | (1 << INST_DBGE_DBLT) |
+        (1 << INST_DBGT_DBLE),
+
+    ARITH_MASK = (1 << INST_ADD_SUB) | (1 << INST_ADDX_SUBX) | (1 << INST_ADDA_SUBA) |
+        (1 << INST_ADDI_SUBI) | (1 << INST_ADDQ_SUBQ)
+};
 
 #define VIRT_TO_REAL true
 #define REAL_TO_VIRT false

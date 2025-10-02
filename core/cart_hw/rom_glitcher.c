@@ -652,7 +652,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
 
     int16_t current_mask[RG_MAX_REPLAY_GAMEPADS] = { 0 };
 
-    // ----------------- rg_input_replay.record -----------------
+    // ---------------- rg_input_replay.record ----------------
     if (rg_input_replay.record) {
         if (rg_input_replay.length >= RG_MAX_REPLAY_FRAMES) {
             rg_input_replay.record = false;
@@ -698,7 +698,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
             rg_menu.current->selected_index = 0;
         }
     }
-    // ----------------- normal -----------------
+    // ------------------------ normal ------------------------
     else {
         if (libretro_supports_bitmasks)
             current_mask[0] = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
@@ -710,7 +710,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
 
     bool menu_key = ((current_mask[0] & rg_menu_button) == rg_menu_button);
 
-    // ----------------- menu_key -----------------
+    // ----------------------- menu_key -----------------------
     if (!menu_key && rg_button_states[0].was_pressed && !rg_button_states[0].is_processed) {
         if (rg_input_replay.record) {
             rg_input_replay.record = false;
@@ -762,7 +762,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         bool step_back_key = (current_mask[0] >>
             (rg_swap_buttons ? RETRO_DEVICE_ID_JOYPAD_X : RETRO_DEVICE_ID_JOYPAD_Y)) & 1;
 
-        // ----------------- prev_key -----------------
+        // --------------------- prev_key ---------------------
         if (!prev_key && rg_button_states[1].was_pressed && !rg_button_states[1].is_processed) {
             if (rg_input_replay.play)
                 ;
@@ -775,7 +775,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         rg_button_states[1].was_pressed = prev_key;
         if (prev_key) rg_button_states[1].is_processed = false;
 
-        // ----------------- next_key -----------------
+        // --------------------- next_key ---------------------
         if (!next_key && rg_button_states[2].was_pressed && !rg_button_states[2].is_processed) {
             if (rg_input_replay.play)
                 ;
@@ -787,7 +787,7 @@ void rg_handle_input(const t_bitmap* bitmap, const int* vwidth, const int* vheig
         rg_button_states[2].was_pressed = next_key;
         if (next_key) rg_button_states[2].is_processed = false;
 
-        // ----------------- confirm_found_key -----------------
+        // ---------------- confirm_found_key -----------------
         if (!confirm_found_key && rg_button_states[3].was_pressed && !rg_button_states[3].is_processed) {
             if (rg_input_replay.play) {
                 rg_input_replay.play = false;
@@ -948,7 +948,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         uint16_t opcode = (high_byte << 8) | rom_data[byte_addr + 1];
 
     // --- Bcc инструкции ---
-        if ((rg_inst_allowed & 0x000000FF) && 
+        if ((rg_inst_allowed & BCC_MASK) &&
             (high_byte >= 0x62 && high_byte <= 0x6f)) {
             // Проверка бита разрешения поиска конкретной пары Bcc инструкций
             if (!(rg_inst_allowed & (1 << ((high_byte - 0x62) >> 1))))
@@ -1012,7 +1012,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         }
         
     // --- DBcc инструкции ---
-        else if ((rg_inst_allowed & 0x00FF0000) &&
+        else if ((rg_inst_allowed & DBCC_MASK) &&
             ((opcode & 0b1111000011111000) == 0b0101000011001000)) {
             // Проверка бита разрешения поиска конкретной пары DBcc инструкций
             if (!(rg_inst_allowed & (1 << (((opcode >> 8) & 0x0F) + 16))))
@@ -1022,7 +1022,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         }
 
     // --- Scc инструкции ---
-        else if ((rg_inst_allowed & 0x0000FF00) &&
+        else if ((rg_inst_allowed & SCC_MASK) &&
             ((opcode & 0b1111000011000000) == 0b0101000011000000)) {
             // Проверка бита разрешения поиска конкретной пары Scc инструкций
             if (!(rg_inst_allowed & (1 << (((opcode >> 8) & 0x0F) + 8))))
@@ -1059,13 +1059,11 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         }
 
     // --- ADD/SUB, ADDX/SUBX, ADDA/SUBA, ADDI/SUBI инструкции ---
-        else if ((rg_inst_allowed & 0x0F000000) &&
+        else if ((rg_inst_allowed & ARITH_MASK) &&
             ((high_byte >= 0x90 && high_byte <= 0x9F) ||    // SUB/SUBX/SUBA
             (high_byte >= 0xD0 && high_byte <= 0xDF) ||     // ADD/ADDX/ADDA
             (high_byte == 0x04) || (high_byte == 0x06))     // ADDI/SUBI
             ) {
-            //opcode = (rom_data[byte_addr] << 8) | rom_data[byte_addr + 1];
-
             if (((opcode & 0b1111000011000000) == 0b1101000011000000) ||        // ADDA
                 ((opcode & 0b1111000011000000) == 0b1001000011000000)) {        // SUBA
                 if (rg_inst_allowed & (1 << INST_ADDA_SUBA))
@@ -1105,7 +1103,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
             opcode = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
         }
 
-        // если прошли предыдущие проверки
+    // --- если прошли предыдущие проверки
         if (next_checks) {
 #ifdef COMPRESSED_OPCODE_TABLE
             if (!m68k_opcode_valid(opcode))
@@ -1331,8 +1329,9 @@ static void free_and_reset_memory(void) {
         bug_range = NULL;
         bug_range_count = 0;
         bug_range_capacity = 0;
-        rg_clear_bug_range = false;
     }
+
+    rg_clear_bug_range = false;
 
     for (int i = 0; i < rg_found_glitches.count; i++) {
         rg_found_glitches.virt_address[i] = 0;
@@ -1469,13 +1468,14 @@ static bool cheats_file_save(uint32_t real_address,
 
     for (int i = 0; i < TOTAL_INST_BITS; i++)
         if (rg_inst_allowed & (1 << i))
-            snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s ", rg_instr_mnemonic[i]);
+            snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s%s",
+                (strlen(filter) > 0) ? " " : "", rg_instr_mnemonic[i]);
 
     snprintf(new_block, sizeof(new_block),
-        "cheat%d_desc = \"Glitch[%d] step[%u] mod[%02X->%02X] filter[%s]\"\n"
+        "cheat%d_desc = \"Glitch description[%d], mod[%02X->%02X], filter[%s]\"\n"
         "cheat%d_code = \"%06X:%02X\"\n"
         "cheat%d_enable = \"true\"\n\n",
-        cheats_count + 1, cheats_count + 1, rg_main.step_count, initial_value, mod_value, filter,
+        cheats_count + 1, cheats_count + 1, initial_value, mod_value, filter,
         cheats_count + 1, real_address, mod_value,
         cheats_count + 1);
 
