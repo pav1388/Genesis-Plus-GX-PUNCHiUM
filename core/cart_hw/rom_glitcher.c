@@ -32,7 +32,7 @@ const char* rg_instr_mnemonic[TOTAL_INST_BITS] = {
     "BHI/BLS", "BCC/BCS", "BNE/BEQ", "BVC/BVS", "BPL/BMI", "BGE/BLT", "BGT/BLE", "/",
     "/", "SHI/SLS", "SCC/SCS", "SNE/SEQ", "SVC/SVS", "SPL/SMI", "SGE/SLT", "SGT/SLE",
     "/", "DBHI/LS", "DBCC/CS", "DBNE/EQ", "DBVC/VS", "DBPL/MI", "DBGE/LT", "DBGT/LE",
-    "ADD/SUB", "ADDX/SUBX", "ADDA/SUBA", "ADDI/SUBI", "ADDQ/SUBQ", "/", "/", "/"
+    "ADD/SUB", "ADDX/SUBX", "ADDA/SUBA", "ADDI/SUBI", "ADDQ/SUBQ", "DIVU/MULU", "DIVS/MULS", "/"
 };
 
 rom_glitcher_main_t rg_main = {
@@ -219,8 +219,10 @@ static uint8_t invert_value(uint8_t value) {
     if ((value >= 0x62 && value <= 0x6F) || (value >= 0x50 && value <= 0x5F))
         return value ^ 0b00000001;
 
-    // ADD/SUB, ADDX/SUBX, ADDA/SUBA
-    if ((value >= 0x90 && value <= 0x9F) || (value >= 0xD0 && value <= 0xDF))
+    // ADD/SUB, ADDX/SUBX, ADDA/SUBA, DIVU/DIVS, MULU/MULS
+    //if ((value >= 0x90 && value <= 0x9F) || (value >= 0xD0 && value <= 0xDF) ||
+    //    (value >= 0x80 && value <= 0x8F) || (value >= 0xC0 && value <= 0xCF))
+    if ((value >= 0x80 && value <= 0x9F) || (value >= 0xC0 && value <= 0xDF))
         return value ^ 0b01000000;
 
     // ADDI/SUBI
@@ -1069,7 +1071,7 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
         }
 
     // --- ADD/SUB, ADDX/SUBX, ADDA/SUBA, ADDI/SUBI инструкции ---
-        else if ((rg_inst_allowed & ARITH_MASK) &&
+        else if ((rg_inst_allowed & ADD_SUB_MASK) &&
             ((high_byte >= 0x90 && high_byte <= 0x9F) ||    // SUB/SUBX/SUBA
             (high_byte >= 0xD0 && high_byte <= 0xDF) ||     // ADD/ADDX/ADDA
             (high_byte == 0x04) || (high_byte == 0x06))     // ADDI/SUBI
@@ -1109,6 +1111,40 @@ static bool instructions_scan_rom(uint8_t* rom_data, uint32_t rom_size, uint16_t
             // Проверка опкода после предпологаемой ADD*/SUB* инструкции
             if (byte_addr + 3 >= rom_size)
                 continue;
+
+            opcode = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
+        }
+
+    // --- DIV/MUL инструкции ---
+        else if ((rg_inst_allowed & DIV_MUL_MASK) &&
+            ((high_byte >= 0x80 && high_byte <= 0x8F) ||    // DIVU/DIVS
+            (high_byte >= 0xC0 && high_byte <= 0xCF))       // MULU/MULS
+            ) {
+            if (((opcode & 0b1111000111000000) == 0b1000000011000000) ||        // DIVU
+                ((opcode & 0b1111000111000000) == 0b1100000011000000)) {        // MULU
+                if (rg_inst_allowed & (1 << INST_DIVU_MULU))
+                    next_checks = true;
+            }
+            else if (((opcode & 0b1111000111000000) == 0b1000000111000000) ||   // DIVS
+                ((opcode & 0b1111000111000000) == 0b1100000111000000)) {        // MULS
+                if (rg_inst_allowed & (1 << INST_DIVS_MULS))
+                    next_checks = true;
+            }
+
+            if (!next_checks)
+                continue;
+
+#ifdef COMPRESSED_OPCODE_TABLE
+            if (!m68k_opcode_valid(opcode))
+                continue;
+#else
+            if (!m68k_opcode_valid_table[opcode])
+                continue;
+#endif // COMPRESSED_OPCODE_TABLE
+
+            // Проверка опкода после предпологаемой DIV/MUL инструкции
+            if (byte_addr + 3 >= rom_size)
+                 continue;
 
             opcode = (rom_data[byte_addr + 2] << 8) | rom_data[byte_addr + 3];
         }
@@ -1479,7 +1515,7 @@ static bool cheats_file_save(uint32_t real_address,
     for (int i = 0; i < TOTAL_INST_BITS; i++)
         if (rg_inst_allowed & (1 << i))
             snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s%s",
-                (strlen(filter) > 0) ? " " : "", rg_instr_mnemonic[i]);
+                (strlen(filter) > 0) ? "," : "", rg_instr_mnemonic[i]);
 
     snprintf(new_block, sizeof(new_block),
         "cheat%d_desc = \"Glitch description[%d], mod[%02X->%02X], filter[%s]\"\n"

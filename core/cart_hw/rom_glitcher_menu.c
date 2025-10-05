@@ -27,6 +27,7 @@ static void menu_item_open_inst_bcc(void);
 static void menu_item_open_inst_scc(void);
 static void menu_item_open_inst_dbcc(void);
 static void menu_item_open_inst_add_sub(void);
+static void menu_item_open_inst_div_mul(void);
 static void menu_item_game_save_state(void);
 static void menu_item_hide_replay_progress(void);
 
@@ -36,7 +37,9 @@ static bool hide_replay_progress_bar = false;
 static rom_glitcher_menu_item_t menu_launch[] = {
     { get_label_launch_glitcher, rg_launch_glitcher},           // Launch Glitcher
     { get_label_list_of_found, menu_item_open_list_of_found },  // List of found
-    { get_label_inst_allowed, menu_item_open_command_allowed }  // Instruction Filter
+    { get_label_inst_allowed, menu_item_open_command_allowed }, // Instruction Filter
+    { get_label_options, menu_item_open_options }               // Options
+
 };
 
 static rom_glitcher_menu_item_t menu_search[] = {
@@ -67,7 +70,8 @@ static rom_glitcher_menu_item_t menu_command[] = {
     { get_label_inst_group, menu_item_open_inst_bcc },      // Bcc
     { get_label_inst_group, menu_item_open_inst_scc },      // Scc
     { get_label_inst_group, menu_item_open_inst_dbcc },     // DBcc
-    { get_label_inst_group, menu_item_open_inst_add_sub }   // Arithmetic '+-'
+    { get_label_inst_group, menu_item_open_inst_add_sub },  // Arithmetic '+-'
+    { get_label_inst_group, menu_item_open_inst_div_mul }   // Arithmetic '*/'
 };
 
 static rom_glitcher_menu_item_t menu_inst_bcc[] = {
@@ -110,6 +114,11 @@ static rom_glitcher_menu_item_t menu_inst_add_sub[] = {
     { get_label_menu_inst_allowed, menu_item_inst_allowed}    // ADDQ/SUBQ
 };
 
+static rom_glitcher_menu_item_t menu_inst_div_mul[] = {
+    { get_label_menu_inst_allowed, menu_item_inst_allowed},   // DIVU/MULU
+    { get_label_menu_inst_allowed, menu_item_inst_allowed}    // DIVS/MULS
+};
+
 rom_glitcher_menu_manager_t rg_menu = {
     .current = NULL,
     .launch = { menu_launch, ARRAY_SIZE(menu_launch), 0 },
@@ -120,7 +129,8 @@ rom_glitcher_menu_manager_t rg_menu = {
     .inst_bcc = { menu_inst_bcc, ARRAY_SIZE(menu_inst_bcc), 2 },
     .inst_scc = { menu_inst_scc, ARRAY_SIZE(menu_inst_scc), 0 },
     .inst_dbcc = { menu_inst_dbcc, ARRAY_SIZE(menu_inst_dbcc), 0 },
-    .inst_add_sub = { menu_inst_add_sub, ARRAY_SIZE(menu_inst_add_sub), 0 }
+    .inst_add_sub = { menu_inst_add_sub, ARRAY_SIZE(menu_inst_add_sub), 0 },
+    .inst_div_mul = { menu_inst_div_mul, ARRAY_SIZE(menu_inst_div_mul), 0 }
 };
 
 static const char* get_label_launch_glitcher(uint8_t index) { return TR(RG_TR_LAUNCH_GLITCHER); }
@@ -163,24 +173,29 @@ static const char* get_label_inst_group(uint8_t index) {
     uint8_t total_count = 0;
 
     if (index == 0) {
-        label = TR(RG_TR_INSTRUCTION_BRANCHING);
+        label = TR(RG_TR_INSTRUCTION_BCC);
         mask = BCC_MASK;
         total_count = rg_menu.inst_bcc.item_count;
     }
     else if (index == 1) {
-        label = TR(RG_TR_INSTRUCTION_SETTING);
+        label = TR(RG_TR_INSTRUCTION_SCC);
         mask = SCC_MASK;
         total_count = rg_menu.inst_scc.item_count;
     }
     else if (index == 2) {
-        label = TR(RG_TR_INSTRUCTION_LOOPING);
+        label = TR(RG_TR_INSTRUCTION_DBCC);
         mask = DBCC_MASK;
         total_count = rg_menu.inst_dbcc.item_count;
     }
     else if (index == 3) {
-        label = TR(RG_TR_INSTRUCTION_ARITHMETIC);
-        mask = ARITH_MASK;
+        label = TR(RG_TR_INSTRUCTION_ADD_SUB);
+        mask = ADD_SUB_MASK;
         total_count = rg_menu.inst_add_sub.item_count;
+    }
+    else if (index == 4) {
+        label = TR(RG_TR_INSTRUCTION_DIV_MUL);
+        mask = DIV_MUL_MASK;
+        total_count = rg_menu.inst_div_mul.item_count;
     }
 
 
@@ -233,13 +248,15 @@ static const char* get_label_menu_inst_allowed(uint8_t index) {
     uint8_t new_index = 0;
 
     if (rg_menu.current == &rg_menu.inst_bcc)
-        new_index = index;
+        new_index = index + INST_BHI_BLS;
     else if (rg_menu.current == &rg_menu.inst_scc)
-        new_index = index + 8;
+        new_index = index + INST_SKIP_8;
     else if (rg_menu.current == &rg_menu.inst_dbcc)
-        new_index = index + 16;
+        new_index = index + INST_SKIP_16;
     else if (rg_menu.current == &rg_menu.inst_add_sub)
-        new_index = index + 24;
+        new_index = index + INST_ADD_SUB;
+    else if (rg_menu.current == &rg_menu.inst_div_mul)
+        new_index = index + INST_DIVU_MULU;
 
     snprintf(buf[index], sizeof(buf[index]), "%s-%s", rg_instr_mnemonic[new_index],
         (rg_inst_allowed & (1 << new_index)) ? TR(RG_TR_ON) : TR(RG_TR_OFF));
@@ -364,13 +381,15 @@ static void menu_item_inst_allowed(void) {
     uint8_t index = 0;
 
     if (rg_menu.current == &rg_menu.inst_bcc)
-        index = 0;
+        index = INST_BHI_BLS;
     else if (rg_menu.current == &rg_menu.inst_scc)
-        index += 8;
+        index += INST_SKIP_8;
     else if (rg_menu.current == &rg_menu.inst_dbcc)
-        index += 16;
+        index += INST_SKIP_16;
     else if (rg_menu.current == &rg_menu.inst_add_sub)
-        index += 24;
+        index += INST_ADD_SUB;
+    else if (rg_menu.current == &rg_menu.inst_div_mul)
+        index += INST_DIVU_MULU;
 
     rg_inst_allowed ^= (1 << (rg_menu.current->selected_index + index));
     rg_game_save_state();
@@ -398,6 +417,7 @@ static void menu_item_open_inst_bcc(void) { rg_menu.current = &rg_menu.inst_bcc;
 static void menu_item_open_inst_scc(void) { rg_menu.current = &rg_menu.inst_scc; }
 static void menu_item_open_inst_dbcc(void) { rg_menu.current = &rg_menu.inst_dbcc; }
 static void menu_item_open_inst_add_sub(void) { rg_menu.current = &rg_menu.inst_add_sub; }
+static void menu_item_open_inst_div_mul(void) { rg_menu.current = &rg_menu.inst_div_mul; }
 static void menu_item_hide_replay_progress(void) { hide_replay_progress_bar = !hide_replay_progress_bar; }
 
 static void menu_item_game_save_state(void) {
@@ -453,7 +473,7 @@ void rg_menu_show(void) {
 
         for (int i = 0; i < TOTAL_INST_BITS; i++)
             if (rg_inst_allowed & (1 << i))
-                snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s ", rg_instr_mnemonic[i]);
+                snprintf(filter + strlen(filter), sizeof(filter) - strlen(filter), "%s,", rg_instr_mnemonic[i]);
 
         snprintf(log_text, sizeof(log_text), "%s %u (%s)  |  %s %u/%u  |  %u.%u%%  |  %s %u:%u  |  %s",
             TR(RG_TR_STEP),

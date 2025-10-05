@@ -3,38 +3,26 @@
 #ifndef _ROM_GLITCHER_DEFINES_H_
 #define _ROM_GLITCHER_DEFINES_H_
 
-// Версия и отладка
 #define RG_DEBUG 0
-#define RG_VERSION_BASE "v0.3.4"
+#define RG_VERSION_BASE "v0.3.5"
 #if RG_DEBUG
     #define RG_VERSION RG_VERSION_BASE "-dev"
 #else
     #define RG_VERSION RG_VERSION_BASE
 #endif
 
-// Ключи и настройки
 #define RG_DISABLED_KEY                 -2
 #define RG_PATH_SIZE                    512
 #define RG_ROM_HEADER_SIZE              512
 
-// Лимиты для структур
+#define RG_FOUND_GLITCH_PER_PAGE        6
 #define RG_MAX_FOUND_GLITCH_SLOTS       256
 #define RG_MAX_REPLAY_FRAMES            7200    // 60 FPS * 120 sec
 #define RG_MAX_REPLAY_GAMEPADS          2       // port 0 and 1
 #define RG_MAX_BACKUP_SLOTS             33
 
-// Настройки меню
-#define RG_FOUND_GLITCH_PER_PAGE        6
-#define RG_MSG_DEBUG        0
-#define RG_MSG_INFO         1
-#define RG_MSG_ERROR        2
-#define RG_MSG_FOUND        3
-#define RG_MSG_REPLAY_REC   4
-#define RG_MSG_REPLAY_PLAY  5
-
 // Битовая маска фильтра инструкций rg_inst_allowed:
-#define TOTAL_INST_BITS_USED 26
-
+#define TOTAL_INST_BITS_USED 28
 typedef enum {
     // -- Условные переходы (Bcc)
     INST_BHI_BLS = 0,   // Branch if Higher/Lower or Same
@@ -67,13 +55,13 @@ typedef enum {
     INST_DBGT_DBLE,     // Decrement and Branch if Greater Than/Less or Equal
 
     // -- Арифметические
-    INST_ADD_SUB = 24,       // ADD/SUB   (Addition/Subtraction)
+    INST_ADD_SUB = 24,  // ADD/SUB   (Addition/Subtraction)
     INST_ADDX_SUBX,     // ADDX/SUBX (Addition/Subtraction with Expansion)
     INST_ADDA_SUBA,     // ADDA/SUBA (Addition/Subtraction of Addresses)
     INST_ADDI_SUBI,     // ADDI/SUBI (Addition/Subtraction of Immediate Values)
     INST_ADDQ_SUBQ,     // ADDQ/SUBQ (Fast Addition/Subtraction)
-    INST_SKIP_29,       // (заглушка)
-    INST_SKIP_30,       // (заглушка)
+    INST_DIVU_MULU,     // DIVU/MULU (Unsigned Division/Multiplication)
+    INST_DIVS_MULS,     // DIVS/MULS (Signed Division/Multiplication)
     INST_SKIP_31,       // (заглушка)
 
     TOTAL_INST_BITS = 32
@@ -92,11 +80,19 @@ enum {
         (1 << INST_DBVC_DBVS) | (1 << INST_DBPL_DBMI) | (1 << INST_DBGE_DBLT) |
         (1 << INST_DBGT_DBLE),
 
-    ARITH_MASK = (1 << INST_ADD_SUB) | (1 << INST_ADDX_SUBX) | (1 << INST_ADDA_SUBA) |
-        (1 << INST_ADDI_SUBI) | (1 << INST_ADDQ_SUBQ)
+    ADD_SUB_MASK = (1 << INST_ADD_SUB) | (1 << INST_ADDX_SUBX) | (1 << INST_ADDA_SUBA) |
+        (1 << INST_ADDI_SUBI) | (1 << INST_ADDQ_SUBQ),
+
+    DIV_MUL_MASK = (1 << INST_DIVU_MULU) | (1 << INST_DIVS_MULS)
 };
 
-#define VIRT_TO_REAL true
-#define REAL_TO_VIRT false
+#define VIRT_TO_REAL        true
+#define REAL_TO_VIRT        false
+#define RG_MSG_DEBUG        0
+#define RG_MSG_INFO         1
+#define RG_MSG_ERROR        2
+#define RG_MSG_FOUND        3
+#define RG_MSG_REPLAY_REC   4
+#define RG_MSG_REPLAY_PLAY  5
 
 #endif

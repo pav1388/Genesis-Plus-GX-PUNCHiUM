@@ -32,6 +32,7 @@ typedef struct {
     rom_glitcher_menu_t inst_scc;
     rom_glitcher_menu_t inst_dbcc;
     rom_glitcher_menu_t inst_add_sub;
+    rom_glitcher_menu_t inst_div_mul;
 } rom_glitcher_menu_manager_t;
 
 extern const char* rg_instr_mnemonic[];
